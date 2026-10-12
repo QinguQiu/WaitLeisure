@@ -374,3 +374,27 @@ Windows PowerShell 5.1 在没有 BOM 时会按系统 ANSI 代码页（GBK）读�
 - 无障碍服务能否正常拦截非白名单应用
 - 定时锁机是否按点触发
 - 各厂商 ROM 的后台限制是否需要额外放行（见第四节「国产 ROM 额外注意」）
+
+---
+
+## 十一、版本号自动化
+
+`app/build.gradle.kts` 里的版本号**从 git 自动派生**，每次提交自动递增，不需要手动改任何文件：
+
+| 字段 | 取值 | 例子 |
+|---|---|---|
+| `versionCode` | 仓库提交总数（`git rev-list --count HEAD`） | `7` |
+| `versionName` | `1.0.<提交数>+<短 hash>` | `1.0.7+e6c9ee0` |
+
+好处：
+
+- `versionCode` 严格单调递增，满足 Android 对覆盖安装的要求
+- 从版本号就能直接对上是哪一次提交，排查问题时不用猜
+
+**取不到 git 时自动退回 `versionCode = 1` / `versionName = "1.0.1+nogit"`，不会因此让构建失败**
+（比如把 ZIP 解压出来直接构建，或机器上没装 git）。
+
+用 `providers.exec` 而不是 `Runtime.exec`：前者是配置缓存安全的写法，
+Gradle 会把命令输出纳入配置缓存的指纹，所以提交之后版本号一定会跟着变。
+
+如果你想手动控制版本号，把 `defaultConfig` 里那两行改回常量即可。
