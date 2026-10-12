@@ -413,7 +413,7 @@ Windows PowerShell 5.1 在没有 BOM 时会按系统 ANSI 代码页（GBK）读�
 - `versionCode` 严格单调递增，满足 Android 对覆盖安装的要求
 - 从版本号就能直接对上是哪一次提交，排查问题时不用猜
 
-**取不到 git 时自动退回 `versionCode = 1` / `versionName = "1.0.1+nogit"`，不会因此让构建失败**
+**取不到 git 时自动退回 `versionCode = 1` / `versionName = "1.0.1"`，不会因此让构建失败**
 （比如把 ZIP 解压出来直接构建，或机器上没装 git）。
 
 用 `providers.exec` 而不是 `Runtime.exec`：前者是配置缓存安全的写法，
