@@ -39,6 +39,8 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.selflock.alarm.AlarmScheduler
 import com.selflock.data.Repos
+import com.selflock.util.DiagLog
+import com.selflock.lock.LockAccessibilityService
 import com.selflock.lock.LockController
 import com.selflock.lock.LockScreenActivity
 import com.selflock.model.Schedule
@@ -168,6 +170,34 @@ fun HomeScreen() {
         ) {
             OutlinedButton(onClick = { showPinDialog = true }) {
                 Text(if (Repos.prefs.pinHash.isNullOrEmpty()) "设置 PIN" else "修改 PIN")
+            }
+        }
+
+        SectionCard(
+            title = "诊断日志",
+            subtitle = "服务" + (if (LockAccessibilityService.isConnected()) "已连接" else "未连接") +
+                " · 窗口事件 " + LockAccessibilityService.receivedEventCount() + " 次" +
+                " · 当前" + (if (locked) "已锁定" else "未锁定")
+        ) {
+            val lines = remember(refreshKey) { DiagLog.snapshot() }.asReversed()
+            if (lines.isEmpty()) {
+                Text(
+                    text = "还没有记录。开启无障碍并锁机后，这里会显示每一个窗口切换事件。",
+                    fontSize = 11.sp,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            } else {
+                Text(
+                    text = lines.joinToString("\n"),
+                    fontSize = 11.sp,
+                    lineHeight = 16.sp,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            }
+            Spacer(Modifier.height(4.dp))
+            Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                TextButton(onClick = { refreshKey++ }) { Text("刷新") }
+                TextButton(onClick = { DiagLog.clear(); refreshKey++ }) { Text("清空") }
             }
         }
 

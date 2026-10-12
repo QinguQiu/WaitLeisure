@@ -59,6 +59,7 @@ import androidx.compose.ui.unit.sp
 import androidx.core.graphics.drawable.toBitmap
 import com.selflock.R
 import com.selflock.data.Repos
+import com.selflock.util.DiagLog
 import com.selflock.util.Pin
 import kotlinx.coroutines.delay
 import java.text.SimpleDateFormat
@@ -122,8 +123,11 @@ class LockScreenActivity : ComponentActivity() {
          * 之所以能在后台启动 Activity：本应用启用了无障碍服务，
          * 而「拥有系统绑定的服务」是 Android 10+ 后台启动 Activity 限制的豁免项之一。
          * 仍然用 runCatching 兜底 —— 万一被拦，下一次窗口切换时无障碍服务会再拉一次。
+         *
+         * @return true 表示 startActivity 没抛异常。注意这只说明「调用成功」，
+         *         不保证界面真的显示出来了 —— 所以还要把结果记进 DiagLog 才能定位问题。
          */
-        fun show(context: Context) {
+        fun show(context: Context): Boolean {
             val intent = Intent(context, LockScreenActivity::class.java).apply {
                 addFlags(
                     Intent.FLAG_ACTIVITY_NEW_TASK or
@@ -131,7 +135,9 @@ class LockScreenActivity : ComponentActivity() {
                         Intent.FLAG_ACTIVITY_NO_ANIMATION
                 )
             }
-            runCatching { context.startActivity(intent) }
+            // 返回是否真的启动成功。以前这里静默吞异常，出问题时毫无线索；
+            // 调用方（无障碍服务）会把结果写进 DiagLog。
+            return runCatching { context.startActivity(intent) }.isSuccess
         }
     }
 }

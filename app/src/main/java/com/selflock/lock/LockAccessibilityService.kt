@@ -7,6 +7,7 @@ import android.provider.Settings
 import android.telecom.TelecomManager
 import android.view.accessibility.AccessibilityEvent
 import com.selflock.data.Repos
+import com.selflock.util.DiagLog
 
 /**
  * 软锁的核心。
@@ -32,6 +33,14 @@ class LockAccessibilityService : AccessibilityService() {
         super.onServiceConnected()
         Repos.ensure(this)
         selfPackage = packageName
+        connected = true
+        DiagLog.add("服务", "已连接")
+    }
+
+    override fun onUnbind(intent: android.content.Intent?): Boolean {
+        connected = false
+        DiagLog.add("服务", "已断开")
+        return super.onUnbind(intent)
     }
 
     override fun onAccessibilityEvent(event: AccessibilityEvent?) {
@@ -41,38 +50,48 @@ class LockAccessibilityService : AccessibilityService() {
         val pkg = event.packageName?.toString().orEmpty()
         if (pkg.isEmpty()) return
 
+        eventCount++
+
         // 记下最近的前台应用，供 LockForegroundService 做一次性复检
         lastPackage = pkg
 
         // 目标应用真的到前台了 —— 免打扰窗口立刻结束。
-        // 这一步很关键：没有它，窗口会一直挂到兜底时长结束，
-        // 表现就是「打开白名单应用后马上按 Home，锁机页迟迟不弹出来」。
         endGraceIfTargetArrived(pkg)
 
-        // 快速路径：绝大多数时间都没在锁机，这里直接返回，零额外开销
+        // 快速路径：绝大多数时间都没在锁机，这里直接返回，零额外开销。
+        // 注意这里不写诊断日志 —— 不锁机时事件量很大，会把有用的记录冲掉。
         if (!Repos.lockState.isLockedNow()) return
 
         // 用户刚在锁机页点了某个白名单应用 —— 这段时间不拦截。
-        // 否则 ROM（尤其 MIUI/HyperOS）弹出的「启动应用 / 是否允许」确认框
-        // 会被我们当成非白名单窗口秒弹回锁机页，用户根本来不及点「始终允许」。
-        if (inLaunchGrace()) return
+        if (inLaunchGrace()) {
+            DiagLog.add("窗口", "$pkg → 免打扰窗口内，放行")
+            return
+        }
 
         val core = alwaysAllowedPackages()
         lastCoreAllowed = core
 
-        if (shouldBlock(pkg, core)) {
-            LockScreenActivity.show(this)
+        val reason = when {
+            pkg == packageName -> "自身"
+            pkg in core -> "核心放行"
+            Repos.whitelist.contains(pkg) -> "白名单"
+            else -> "拦截"
         }
+
+        if (reason != "拦截") {
+            DiagLog.add("窗口", "$pkg → $reason")
+            return
+        }
+
+        // 关键：把 startActivity 的成功/失败也记下来。
+        // 以前 show() 是 runCatching 包裹后静默吞异常的，失败时毫无线索。
+        val shown = LockScreenActivity.show(this)
+        DiagLog.add("窗口", "$pkg → 拦截，拉起锁机页" + if (shown) "成功" else "失败")
     }
 
     override fun onInterrupt() = Unit
 
-    private fun shouldBlock(pkg: String, core: Set<String>): Boolean {
-        if (pkg == packageName) return false
-        if (pkg in core) return false
-        if (Repos.whitelist.contains(pkg)) return false
-        return true
-    }
+
 
     /**
      * 无论白名单怎么配都必须放行的包。
@@ -114,6 +133,14 @@ class LockAccessibilityService : AccessibilityService() {
         @Volatile
         private var selfPackage: String = ""
 
+        /** 服务是否真的被系统绑定了。设置里显示「已开启」不等于这个为 true。 */
+        @Volatile
+        private var connected: Boolean = false
+
+        /** 收到的窗口事件总数。用来判断服务是不是根本没在收事件。 */
+        @Volatile
+        private var eventCount: Long = 0L
+
         /**
          * 「免打扰」窗口的截止时间戳。
          *
@@ -132,6 +159,12 @@ class LockAccessibilityService : AccessibilityService() {
 
         fun componentName(context: Context): ComponentName =
             ComponentName(context, LockAccessibilityService::class.java)
+
+        /** 供界面显示。 */
+        fun isConnected(): Boolean = connected
+
+        /** 供界面显示。 */
+        fun receivedEventCount(): Long = eventCount
 
         /** 本次免打扰窗口正在等待的目标应用。 */
         @Volatile
