@@ -1,6 +1,7 @@
 package com.selflock.ui
 
 import android.content.Context
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -15,9 +16,11 @@ import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
+import androidx.compose.material3.FilterChip
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.Slider
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
@@ -34,6 +37,7 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.input.PasswordVisualTransformation
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.selflock.alarm.AlarmScheduler
@@ -49,6 +53,7 @@ import com.selflock.util.Pin
 import java.time.Instant
 import java.time.LocalDateTime
 import java.time.ZoneId
+import kotlin.math.roundToInt
 
 /** 一次权限体检的快照。 */
 data class PermissionSnapshot(
@@ -92,7 +97,9 @@ fun HomeScreen() {
 
     val perms = remember(refreshKey) { PermissionSnapshot.of(context) }
     var showPinDialog by remember { mutableStateOf(false) }
-    var showLockConfirm by remember { mutableStateOf(false) }
+    var showLockNowDialog by remember { mutableStateOf(false) }
+    // 记住上次选的时长，下次打开弹窗时沿用，不用每次重选
+    var lockNowMinutes by remember { mutableIntStateOf(DEFAULT_LOCK_NOW_MINUTES) }
 
     Column(
         modifier = Modifier
@@ -106,10 +113,7 @@ fun HomeScreen() {
             scheduleCount = schedules.count { it.enabled },
             whitelistCount = whitelist.size,
             nextTrigger = nextTriggerText(schedules),
-            onLockNow = {
-                if (Repos.prefs.pinHash.isNullOrEmpty()) showLockConfirm = true
-                else LockController.lock(context, 0L)
-            },
+            onLockNow = { showLockNowDialog = true },
             onOpenLockScreen = { LockScreenActivity.show(context) }
         )
 
@@ -199,25 +203,130 @@ fun HomeScreen() {
         )
     }
 
-    if (showLockConfirm) {
-        AlertDialog(
-            onDismissRequest = { showLockConfirm = false },
-            title = { Text("还没设置 PIN") },
-            text = { Text("现在锁定将无法用 PIN 解除，只能等到你手动去设置里关闭无障碍服务。确定继续吗？") },
-            confirmButton = {
-                TextButton(onClick = {
-                    showLockConfirm = false
-                    LockController.lock(context, 0L)
-                }) { Text("仍然锁定") }
-            },
-            dismissButton = {
-                TextButton(onClick = {
-                    showLockConfirm = false
-                    showPinDialog = true
-                }) { Text("先去设置 PIN") }
+    if (showLockNowDialog) {
+        LockNowDialog(
+            initialMinutes = lockNowMinutes,
+            hasPin = !Repos.prefs.pinHash.isNullOrEmpty(),
+            onDismiss = { showLockNowDialog = false },
+            onConfirm = { minutes ->
+                lockNowMinutes = minutes
+                showLockNowDialog = false
+                // 这里一律传具体的到期时间戳（而不是 0=无限期），
+                // 所以「立即锁机」一定会到点自动解除，不会出现无限期锁死的情况。
+                LockController.lock(context, System.currentTimeMillis() + minutes * 60_000L)
             }
         )
     }
+}
+
+// ---------------------------------------------------------------- 立即锁机
+
+/** 立即锁机的时长范围与预设。上限 24 小时。 */
+private const val MIN_LOCK_NOW_MINUTES = 15
+private const val MAX_LOCK_NOW_MINUTES = 24 * 60
+private const val DEFAULT_LOCK_NOW_MINUTES = 60
+private const val LOCK_NOW_STEP_MINUTES = 5
+
+private val LOCK_NOW_PRESETS = listOf(15, 30, 60, 120, 240, 480, 720, 1440)
+
+/**
+ * 「立即锁机」的时长选择。
+ *
+ * 上限写死 24 小时：拖到底也只能锁一天，避免误操作把自己锁死。
+ * 同时把「没有 PIN」的提醒并进这个弹窗 —— 否则要先过一个警告弹窗、
+ * 再过一个时长弹窗，两步太啰嗦。
+ */
+@Composable
+private fun LockNowDialog(
+    initialMinutes: Int,
+    hasPin: Boolean,
+    onDismiss: () -> Unit,
+    onConfirm: (Int) -> Unit
+) {
+    var minutes by remember {
+        mutableIntStateOf(initialMinutes.coerceIn(MIN_LOCK_NOW_MINUTES, MAX_LOCK_NOW_MINUTES))
+    }
+
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text("立即锁机") },
+        text = {
+            Column {
+                Text(
+                    text = minutes.toDurationText(),
+                    fontSize = 28.sp,
+                    fontWeight = FontWeight.Medium,
+                    textAlign = TextAlign.Center,
+                    modifier = Modifier.fillMaxWidth()
+                )
+                Text(
+                    text = "将于 ${releaseTimeText(minutes)} 自动解除",
+                    fontSize = 12.sp,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    textAlign = TextAlign.Center,
+                    modifier = Modifier.fillMaxWidth()
+                )
+
+                Spacer(Modifier.height(16.dp))
+
+                Slider(
+                    value = minutes.toFloat(),
+                    onValueChange = {
+                        minutes = ((it / LOCK_NOW_STEP_MINUTES).roundToInt() * LOCK_NOW_STEP_MINUTES)
+                            .coerceIn(MIN_LOCK_NOW_MINUTES, MAX_LOCK_NOW_MINUTES)
+                    },
+                    valueRange = MIN_LOCK_NOW_MINUTES.toFloat()..MAX_LOCK_NOW_MINUTES.toFloat()
+                )
+
+                Row(
+                    horizontalArrangement = Arrangement.spacedBy(6.dp),
+                    modifier = Modifier.horizontalScroll(rememberScrollState())
+                ) {
+                    LOCK_NOW_PRESETS.forEach { preset ->
+                        FilterChip(
+                            selected = preset == minutes,
+                            onClick = { minutes = preset },
+                            label = { Text(preset.toDurationText()) }
+                        )
+                    }
+                }
+
+                Spacer(Modifier.height(12.dp))
+
+                Text(
+                    text = if (hasPin) {
+                        "锁定期间只有白名单应用可用，输入 PIN 可提前解除。最长 24 小时。"
+                    } else {
+                        "⚠️ 尚未设置 PIN，锁定期间可直接解除，建议先到首页设置。最长 24 小时。"
+                    },
+                    fontSize = 11.sp,
+                    color = if (hasPin) {
+                        MaterialTheme.colorScheme.onSurfaceVariant
+                    } else {
+                        MaterialTheme.colorScheme.error
+                    }
+                )
+            }
+        },
+        confirmButton = {
+            TextButton(onClick = { onConfirm(minutes) }) { Text("开始锁定") }
+        },
+        dismissButton = {
+            TextButton(onClick = onDismiss) { Text("取消") }
+        }
+    )
+}
+
+/** 把「锁 N 分钟」换算成给人看的解除时刻；跨天时带上前缀，避免只看到 HH:mm 分不清哪天。 */
+private fun releaseTimeText(minutes: Int): String {
+    val now = LocalDateTime.now()
+    val at = now.plusMinutes(minutes.toLong())
+    val dayLabel = when (at.toLocalDate()) {
+        now.toLocalDate() -> "今天"
+        now.toLocalDate().plusDays(1) -> "明天"
+        else -> "%d月%d日".format(at.monthValue, at.dayOfMonth)
+    }
+    return "%s %02d:%02d".format(dayLabel, at.hour, at.minute)
 }
 
 @Composable
