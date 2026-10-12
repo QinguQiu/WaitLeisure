@@ -1,0 +1,29 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">SelfLock</string>
+
+    <!-- 无障碍 -->
+    <string name="accessibility_label">SelfLock 锁机服务</string>
+    <string name="accessibility_summary">锁定期间拦截非白名单应用</string>
+    <string name="accessibility_description">开启后，SelfLock 才能在本机进入锁机状态时识别当前打开的应用，并把你带回锁机页。本服务不读取、不上传任何屏幕内容。</string>
+
+    <!-- 通知 -->
+    <string name="notif_channel_locking">锁机状态</string>
+    <string name="notif_channel_locking_desc">锁机期间显示常驻通知</string>
+    <string name="notif_locking_title">SelfLock 锁机中</string>
+    <string name="notif_locking_text">仅白名单应用可用 · 点按查看详情</string>
+
+    <!-- 锁机页 -->
+    <string name="lock_title">已锁定</string>
+    <string name="lock_subtitle">锁定期间仅以下应用可用</string>
+    <string name="lock_unlock">解除锁定</string>
+    <string name="lock_pin_hint">输入 PIN</string>
+    <string name="lock_pin_wrong">PIN 不正确</string>
+    <string name="lock_no_whitelist">白名单为空\n锁定期间将无法使用任何应用</string>
+    <string name="lock_no_pin_notice">尚未设置解锁 PIN，本次将直接解除锁定。建议回到首页设置 PIN。</string>
+
+    <string name="action_confirm">确认</string>
+    <string name="action_cancel">取消</string>
+    <string name="action_save">保存</string>
+    <string name="action_delete">删除</string>
+</resources>

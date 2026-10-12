@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  无障碍服务配置。
+  关键点：
+  - 只要 typeWindowStateChanged 事件即可拿到前台应用包名；
+  - canRetrieveWindowContent="false" 表示不读取窗口内容（隐私最小化，也更容易被用户接受）；
+  - notificationTimeout 取 50ms，兼顾响应速度与耗电。
+-->
+<accessibility-service xmlns:android="http://schemas.android.com/apk/res/android"
+    android:accessibilityEventTypes="typeWindowStateChanged"
+    android:accessibilityFeedbackType="feedbackGeneric"
+    android:accessibilityFlags="flagDefault"
+    android:canRetrieveWindowContent="false"
+    android:description="@string/accessibility_description"
+    android:notificationTimeout="50"
+    android:summary="@string/accessibility_summary" />

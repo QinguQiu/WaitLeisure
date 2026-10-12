@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  设备管理员策略。
+  这里只声明 force-lock（把设备锁屏）。
+  它的副作用才是我们真正想要的：只要管理员处于「已激活」状态，
+  系统设置里的「卸载」按钮就会被置灰，防止锁机中途被一键卸载。
+-->
+<device-admin xmlns:android="http://schemas.android.com/apk/res/android">
+    <uses-policies>
+        <force-lock />
+    </uses-policies>
+</device-admin>
