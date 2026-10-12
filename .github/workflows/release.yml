@@ -1,0 +1,101 @@
+name: Release
+
+# 打 tag 就自动构建并发布 Release：
+#   git tag v1.0.7 && git push origin v1.0.7
+#
+# 也可以在 Actions 页面手动触发（workflow_dispatch）。手动触发不创建 Release，
+# 只把 APK 传成 workflow artifact，方便先单独验证构建能不能过。
+
+on:
+  push:
+    tags:
+      - 'v*'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    env:
+      # runner 在海外，直连 google()/mavenCentral() 更快更稳。
+      # 开着阿里云镜像反而可能超时 —— Gradle 是「仓库里找不到才换下一个」，
+      # 超时不会自动降级，所以这里必须显式关掉镜像。
+      SELFLOCK_NO_CN_MIRRORS: "1"
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          # 必须拉完整历史：versionCode 取的是 git rev-list --count HEAD，
+          # 默认的 fetch-depth: 1 会让它恒等于 1，版本号就废了。
+          fetch-depth: 0
+
+      - name: Set up JDK 21
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+
+      - name: Grant execute permission for gradlew
+        run: chmod +x ./gradlew
+
+      - name: Build debug APK
+        run: ./gradlew :app:assembleDebug --no-daemon --stacktrace
+
+      - name: Read version from APK metadata
+        id: ver
+        run: |
+          META=app/build/outputs/apk/debug/output-metadata.json
+          echo "--- output-metadata.json ---"
+          cat "$META"
+          CODE=$(python3 -c "import json;print(json.load(open('$META'))['elements'][0]['versionCode'])")
+          NAME=$(python3 -c "import json;print(json.load(open('$META'))['elements'][0]['versionName'])")
+          echo "code=$CODE" >> "$GITHUB_OUTPUT"
+          echo "name=$NAME" >> "$GITHUB_OUTPUT"
+          echo "versionCode=$CODE  versionName=$NAME"
+
+      - name: Collect APK
+        run: |
+          mkdir -p out
+          cp app/build/outputs/apk/debug/app-debug.apk "out/SelfLock-${{ steps.ver.outputs.name }}.apk"
+          ls -lh out/
+
+      - name: Upload as workflow artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: SelfLock-apk
+          path: out/*.apk
+
+      - name: Write release notes
+        run: |
+          {
+            echo "自动构建自 tag \`${GITHUB_REF_NAME}\`。"
+            echo
+            echo "| | |"
+            echo "|---|---|"
+            echo "| versionCode | \`${{ steps.ver.outputs.code }}\` |"
+            echo "| versionName | \`${{ steps.ver.outputs.name }}\` |"
+            echo "| 签名 | debug（仅供自用/侧载，请勿上架商店） |"
+            echo
+            echo "### 安装"
+            echo
+            echo '```bash'
+            echo "adb install -r SelfLock-*.apk"
+            echo '```'
+            echo
+            echo "首次使用请按 README 第四节完成 5 项权限授权。"
+            echo "小米 / 红米（HyperOS）特别注意 **「后台弹出界面」**，不授权锁机页拉不起来。"
+          } > RELEASE_NOTES.md
+          cat RELEASE_NOTES.md
+
+      - name: Create GitHub Release
+        if: startsWith(github.ref, 'refs/tags/')
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          gh release create "${GITHUB_REF_NAME}" out/*.apk \
+            --title "SelfLock ${GITHUB_REF_NAME}" \
+            --notes-file RELEASE_NOTES.md
