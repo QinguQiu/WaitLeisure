@@ -401,7 +401,17 @@ private fun remainingText(now: Long): String {
     return if (hours > 0) "剩余 %d 小时 %d 分".format(hours, minutes) else "剩余 %d 分钟".format(minutes)
 }
 
+/**
+ * 点击白名单应用后，给 ROM 的「启动应用」确认框留多长的可交互时间。
+ * 10 秒足够读完并点掉；同时窗口结束后前台服务会补检查，不会留长期空子。
+ */
+private const val LAUNCH_GRACE_MILLIS = 10_000L
+
 private fun launchApp(context: Context, packageName: String) {
+    // 顺序很重要：必须赶在确认框弹出之前把免打扰窗口打开，
+    // 否则第一次点击照样会被自己的拦截打掉。
+    LockAccessibilityService.startLaunchGrace(LAUNCH_GRACE_MILLIS)
+
     runCatching {
         val intent = context.packageManager.getLaunchIntentForPackage(packageName) ?: return@runCatching
         intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)

@@ -57,12 +57,24 @@ class LockForegroundService : Service() {
 
     private fun watchExpiry() {
         scope.launch {
+            var wasInGrace = false
             while (isActive) {
                 if (!Repos.lockState.isLockedNow()) {
                     Repos.lockState.refresh()
                     shutdown()
                     return@launch
                 }
+
+                // 免打扰窗口刚结束的那一刻补一次检查。
+                // 场景：用户在窗口内把锁机页丢到后台（比如按了 Home、或点了「拒绝」后
+                // 停在别处），此后再没有窗口切换事件，无障碍服务不会主动发现。
+                // 这里每秒轮询一次，正好用来把锁机页拉回来，不留空子。
+                val inGrace = LockAccessibilityService.inLaunchGrace()
+                if (wasInGrace && !inGrace && LockAccessibilityService.isForegroundBlocked()) {
+                    LockScreenActivity.show(this@LockForegroundService)
+                }
+                wasInGrace = inGrace
+
                 delay(1000L)
             }
         }

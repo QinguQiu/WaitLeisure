@@ -47,6 +47,11 @@ class LockAccessibilityService : AccessibilityService() {
         // 快速路径：绝大多数时间都没在锁机，这里直接返回，零额外开销
         if (!Repos.lockState.isLockedNow()) return
 
+        // 用户刚在锁机页点了某个白名单应用 —— 这段时间不拦截。
+        // 否则 ROM（尤其 MIUI/HyperOS）弹出的「启动应用 / 是否允许」确认框
+        // 会被我们当成非白名单窗口秒弹回锁机页，用户根本来不及点「始终允许」。
+        if (inLaunchGrace()) return
+
         val core = alwaysAllowedPackages()
         lastCoreAllowed = core
 
@@ -104,8 +109,35 @@ class LockAccessibilityService : AccessibilityService() {
         @Volatile
         private var selfPackage: String = ""
 
+        /**
+         * 「免打扰」窗口的截止时间戳。
+         *
+         * 为什么需要它：用户从锁机页点某个白名单应用时，MIUI/HyperOS 会先弹一个
+         * 「SelfLock 想要打开 XXX，是否允许？」的确认框。这个框属于系统/安全中心，
+         * 不在白名单里，于是被本服务当成「非白名单应用」立刻弹回锁机页 ——
+         * 表现就是确认框一闪而过，用户永远点不到「始终允许」。
+         *
+         * 这也正是这个修法刻意不判包名的原因：那个确认框到底属于哪个包，
+         * 各家 ROM、各版本都不一样，猜错了就白改。用一个时间窗口绕过包名识别，最稳。
+         *
+         * 窗口结束后由 LockForegroundService 补一次前台检查，把可能的空子堵上。
+         */
+        @Volatile
+        private var launchGraceUntil: Long = 0L
+
         fun componentName(context: Context): ComponentName =
             ComponentName(context, LockAccessibilityService::class.java)
+
+        /** 当前是否处于「刚点了白名单应用」的免打扰窗口内。 */
+        fun inLaunchGrace(): Boolean = System.currentTimeMillis() < launchGraceUntil
+
+        /**
+         * 开一段免打扰窗口。
+         * @param millis 窗口时长。要够用户读完并点掉确认框，又不能太长留下空子。
+         */
+        fun startLaunchGrace(millis: Long) {
+            launchGraceUntil = System.currentTimeMillis() + millis
+        }
 
         /**
          * 最近一次的前台应用是否应当被拦。
