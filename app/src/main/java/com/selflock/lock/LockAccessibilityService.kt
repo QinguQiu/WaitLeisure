@@ -44,6 +44,11 @@ class LockAccessibilityService : AccessibilityService() {
         // 记下最近的前台应用，供 LockForegroundService 做一次性复检
         lastPackage = pkg
 
+        // 目标应用真的到前台了 —— 免打扰窗口立刻结束。
+        // 这一步很关键：没有它，窗口会一直挂到兜底时长结束，
+        // 表现就是「打开白名单应用后马上按 Home，锁机页迟迟不弹出来」。
+        endGraceIfTargetArrived(pkg)
+
         // 快速路径：绝大多数时间都没在锁机，这里直接返回，零额外开销
         if (!Repos.lockState.isLockedNow()) return
 
@@ -128,15 +133,36 @@ class LockAccessibilityService : AccessibilityService() {
         fun componentName(context: Context): ComponentName =
             ComponentName(context, LockAccessibilityService::class.java)
 
+        /** 本次免打扰窗口正在等待的目标应用。 */
+        @Volatile
+        private var graceTargetPackage: String? = null
+
         /** 当前是否处于「刚点了白名单应用」的免打扰窗口内。 */
         fun inLaunchGrace(): Boolean = System.currentTimeMillis() < launchGraceUntil
 
         /**
          * 开一段免打扰窗口。
-         * @param millis 窗口时长。要够用户读完并点掉确认框，又不能太长留下空子。
+         *
+         * @param targetPackage 期望被打开的白名单应用。**它一到前台，窗口就立刻结束** ——
+         *        这样窗口只在「等待 ROM 确认框」这段时间存在，不会蔓延到用户真正开始用应用之后。
+         * @param millis 兜底时长。用户点了「拒绝」或 ROM 行为异常时，靠它收场。
          */
-        fun startLaunchGrace(millis: Long) {
+        fun startLaunchGrace(targetPackage: String, millis: Long) {
+            graceTargetPackage = targetPackage
             launchGraceUntil = System.currentTimeMillis() + millis
+        }
+
+        /**
+         * 目标应用已到前台 —— 立刻结束免打扰窗口。
+         *
+         * 没有这一步的后果（实测踩到）：窗口会一直挂到兜底时长结束，
+         * 用户在窗口期内按 Home 回桌面时不会被拦，看起来就像锁机失效了。
+         */
+        private fun endGraceIfTargetArrived(pkg: String) {
+            if (pkg.isNotEmpty() && pkg == graceTargetPackage) {
+                graceTargetPackage = null
+                launchGraceUntil = 0L
+            }
         }
 
         /**

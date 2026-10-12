@@ -410,7 +410,7 @@ private const val LAUNCH_GRACE_MILLIS = 10_000L
 private fun launchApp(context: Context, packageName: String) {
     // 顺序很重要：必须赶在确认框弹出之前把免打扰窗口打开，
     // 否则第一次点击照样会被自己的拦截打掉。
-    LockAccessibilityService.startLaunchGrace(LAUNCH_GRACE_MILLIS)
+    LockAccessibilityService.startLaunchGrace(packageName, LAUNCH_GRACE_MILLIS)
 
     runCatching {
         val intent = context.packageManager.getLaunchIntentForPackage(packageName) ?: return@runCatching

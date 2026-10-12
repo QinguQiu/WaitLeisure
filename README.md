@@ -406,7 +406,7 @@ Windows PowerShell 5.1 在没有 BOM 时会按系统 ANSI 代码页（GBK）读�
 | 字段 | 取值 | 例子 |
 |---|---|---|
 | `versionCode` | 仓库提交总数（`git rev-list --count HEAD`） | `7` |
-| `versionName` | `1.0.<提交数>+<短 hash>` | `1.0.7+e6c9ee0` |
+| `versionName` | `1.0.<提交数>.<短 hash>` | `1.0.7.e6c9ee0` |
 
 好处：
 
@@ -420,3 +420,7 @@ Windows PowerShell 5.1 在没有 BOM 时会按系统 ANSI 代码页（GBK）读�
 Gradle 会把命令输出纳入配置缓存的指纹，所以提交之后版本号一定会跟着变。
 
 如果你想手动控制版本号，把 `defaultConfig` 里那两行改回常量即可。
+
+> **为什么不用 semver 的 `1.0.7+hash` 写法？**
+> `+` 在 URL 和文件名里会被百分号编码成 `%2B`，下载下来看到的是
+> `SelfLock-1.0.7%2B5775c98.apk`，像乱码。改成纯点号后不含任何需要转义的字符。

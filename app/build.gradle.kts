@@ -7,7 +7,10 @@ plugins {
 // 版本号自动从 git 派生 —— 每次 git commit 自动 +1，不需要手动改任何文件
 //
 //   versionCode = 仓库提交总数（单调递增，满足 Android 对 versionCode 的要求）
-//   versionName = 1.0.<提交数>+<短 hash>     例如 1.0.7+e6c9ee0
+//   versionName = 1.0.<提交数>.<短 hash>     例如 1.0.7.e6c9ee0
+//
+// 早期用的是 semver 风格的 1.0.7+hash，但 `+` 在文件名和 URL 里会被百分号编码成 %2B，
+// 下载下来看着像乱码，所以改成纯点号分隔，不含任何需要转义的字符。
 //
 // 取不到 git 时（没装 git / 不是仓库 / 从 ZIP 解压得到）退回 1，绝不因此让构建失败。
 // 用 providers.exec 而不是 Runtime.exec：前者是配置缓存安全的写法，
@@ -38,7 +41,7 @@ android {
         minSdk = 26
         targetSdk = 37
         versionCode = gitCommitCount
-        versionName = "1.0.$gitCommitCount+$gitShortHash"
+        versionName = "1.0.$gitCommitCount.$gitShortHash"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
