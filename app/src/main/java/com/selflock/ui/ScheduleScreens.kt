@@ -24,7 +24,6 @@ import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
-import androidx.compose.material3.Slider
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
@@ -49,7 +48,12 @@ import com.selflock.model.Schedule
 import com.selflock.model.describeDays
 import com.selflock.model.toDurationText
 import com.selflock.model.toHhMm
-import kotlin.math.roundToInt
+
+/** 定时规则的时长上限。24 小时 —— 规则本来就是每天重复的，再长没有意义。 */
+private const val MAX_DURATION_MINUTES = 24 * 60
+
+/** 常用时长的快捷入口。第一个是 1 分钟，调试锁机时最省事。 */
+private val DURATION_PRESETS = listOf(1, 5, 30, 60, 120, 480, 1440)
 
 // ---------------------------------------------------------------- 列表
 
@@ -216,16 +220,17 @@ fun ScheduleEditScreen(scheduleId: Long, onDone: () -> Unit) {
         }
 
         SectionCard(title = "持续时长", subtitle = durationMinutes.toDurationText()) {
-            Slider(
-                value = durationMinutes.toFloat(),
-                onValueChange = { durationMinutes = (it / 15f).roundToInt() * 15 },
-                valueRange = 15f..720f
+            DurationPicker(
+                totalMinutes = durationMinutes,
+                maxMinutes = MAX_DURATION_MINUTES,
+                onSelect = { durationMinutes = it }
             )
+            Spacer(Modifier.height(8.dp))
             Row(
                 horizontalArrangement = Arrangement.spacedBy(8.dp),
                 modifier = Modifier.horizontalScroll(rememberScrollState())
             ) {
-                listOf(30, 60, 120, 240, 480).forEach { preset ->
+                DURATION_PRESETS.forEach { preset ->
                     AssistChip(
                         onClick = { durationMinutes = preset },
                         label = { Text(preset.toDurationText()) }

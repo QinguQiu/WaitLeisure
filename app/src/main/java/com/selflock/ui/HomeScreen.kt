@@ -1,7 +1,6 @@
 package com.selflock.ui
 
 import android.content.Context
-import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -16,11 +15,9 @@ import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
-import androidx.compose.material3.FilterChip
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
-import androidx.compose.material3.Slider
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
@@ -53,7 +50,6 @@ import com.selflock.util.Pin
 import java.time.Instant
 import java.time.LocalDateTime
 import java.time.ZoneId
-import kotlin.math.roundToInt
 
 /** 一次权限体检的快照。 */
 data class PermissionSnapshot(
@@ -221,13 +217,14 @@ fun HomeScreen() {
 
 // ---------------------------------------------------------------- 立即锁机
 
-/** 立即锁机的时长范围与预设。上限 24 小时。 */
-private const val MIN_LOCK_NOW_MINUTES = 15
+/**
+ * 立即锁机的时长范围。
+ * 下限特意放到 1 分钟 —— 调试锁机行为时不用每次干等 15 分钟。
+ * 上限 24 小时，选到头也只能锁一天。
+ */
+private const val MIN_LOCK_NOW_MINUTES = 1
 private const val MAX_LOCK_NOW_MINUTES = 24 * 60
 private const val DEFAULT_LOCK_NOW_MINUTES = 60
-private const val LOCK_NOW_STEP_MINUTES = 5
-
-private val LOCK_NOW_PRESETS = listOf(15, 30, 60, 120, 240, 480, 720, 1440)
 
 /**
  * 「立即锁机」的时长选择。
@@ -269,27 +266,12 @@ private fun LockNowDialog(
 
                 Spacer(Modifier.height(16.dp))
 
-                Slider(
-                    value = minutes.toFloat(),
-                    onValueChange = {
-                        minutes = ((it / LOCK_NOW_STEP_MINUTES).roundToInt() * LOCK_NOW_STEP_MINUTES)
-                            .coerceIn(MIN_LOCK_NOW_MINUTES, MAX_LOCK_NOW_MINUTES)
-                    },
-                    valueRange = MIN_LOCK_NOW_MINUTES.toFloat()..MAX_LOCK_NOW_MINUTES.toFloat()
+                DurationPicker(
+                    totalMinutes = minutes,
+                    maxMinutes = MAX_LOCK_NOW_MINUTES,
+                    minMinutes = MIN_LOCK_NOW_MINUTES,
+                    onSelect = { minutes = it }
                 )
-
-                Row(
-                    horizontalArrangement = Arrangement.spacedBy(6.dp),
-                    modifier = Modifier.horizontalScroll(rememberScrollState())
-                ) {
-                    LOCK_NOW_PRESETS.forEach { preset ->
-                        FilterChip(
-                            selected = preset == minutes,
-                            onClick = { minutes = preset },
-                            label = { Text(preset.toDurationText()) }
-                        )
-                    }
-                }
 
                 Spacer(Modifier.height(12.dp))
 
