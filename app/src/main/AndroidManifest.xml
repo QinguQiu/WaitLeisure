@@ -6,6 +6,13 @@
     <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
     <uses-permission android:name="android.permission.SCHEDULE_EXACT_ALARM" />
 
+    <!--
+      一键请求「忽略电池优化」。MIUI/HyperOS 上通常等价于把「省电策略」设为「无限制」，
+      比让用户手动翻三层菜单快得多。
+      注意：该权限在 Google Play 属于政策敏感权限（需说明用途）。本工程是自用/侧载，不涉及上架。
+    -->
+    <uses-permission android:name="android.permission.REQUEST_IGNORE_BATTERY_OPTIMIZATIONS" />
+
     <!-- 锁机期间常驻通知 -->
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_SPECIAL_USE" />

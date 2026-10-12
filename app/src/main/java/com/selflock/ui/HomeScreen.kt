@@ -141,7 +141,7 @@ fun HomeScreen() {
             CheckRow(
                 ok = perms.battery,
                 title = "省电策略 / 忽略电池优化",
-                description = "打开后把「省电策略」设为「无限制」。小米/红米还要顺手开「自启动」和「后台弹出界面」",
+                description = "先弹系统授权框；若未弹出则落到应用信息页，手动把「省电策略」设为「无限制」",
                 actionLabel = "去设置",
                 onAction = { Permissions.openBatteryOptimizationSettings(context) }
             )

@@ -85,14 +85,39 @@ object Permissions {
         context.startSafely(intent)
     }
 
+    /**
+     * 「省电策略」引导 —— 按「效果」而不是「页面」来排序，逐个尝试直到有一个能打开。
+     *
+     * 背景：MIUI/HyperOS 把「省电策略」做成了应用信息页里的一个条目，**没有独立的 Activity**，
+     * 所以不存在「直达省电策略页」的官方入口。网上流传的 MIUI 私有深链
+     * （miui.intent.action.APP_PERM_EDITOR / OP_AUTO_START）指向的是权限编辑页和自启动管理，
+     * 里面也没有省电策略这一项。
+     *
+     * 于是这里改成三级降级：
+     *   1. 系统的「忽略电池优化」授权框 —— 一次点击。MIUI 上通常等价于把省电策略设为「无限制」
+     *   2. MIUI/HyperOS 私有页 APP_PERM_EDITOR —— 自启动、后台弹出界面集中在这一页
+     *   3. 本应用详情页 —— 兜底，用户在这里手动点「省电策略」
+     *
+     * 关键在于：每一步都用 tryStart 真的去 startActivity，抛异常才试下一个。
+     * 因此**在任何 ROM 上都不会跳错页面** —— 最差也是落到应用详情页，也就是现在的行为。
+     * 这比「猜一个 intent 然后赌它能开」稳得多。
+     */
     fun openBatteryOptimizationSettings(context: Context) {
-        // 直接跳「本应用详情页」，而不是系统的 ACTION_IGNORE_BATTERY_OPTIMIZATION_SETTINGS 列表页。
-        //
-        // 原因：小米/红米（HyperOS）把系统的电池优化列表页改得和原生 AOSP 不一致，层级也深，
-        // 跳过去用户找不到自己的应用。而 MIUI/HyperOS 恰好把「省电策略」「自启动」「后台弹出界面」
-        // 全都做在了「应用详情页」里 —— 跳这里反而一步到位。
-        //
-        // 原生 Android 上这个页面同样一定能打开，用户在详情页里再进「电池」即可，不会走错。
+        // ① 已经拿到豁免就不用再弹框了，直接往下走去处理 MIUI 那两个开关
+        if (!isIgnoringBatteryOptimizations(context)) {
+            val request = Intent(Settings.ACTION_REQUEST_IGNORE_BATTERY_OPTIMIZATIONS)
+                .setData(Uri.fromParts("package", context.packageName, null))
+            if (context.startSafely(request)) return
+        }
+
+        // ② MIUI / HyperOS 私有深链：该应用的「权限编辑」页
+        //    两个 extra 键名都写上 —— 不同 HyperOS 版本用的键名不一样，多写一个没坏处
+        val miuiEditor = Intent("miui.intent.action.APP_PERM_EDITOR")
+            .putExtra("extra_pkgname", context.packageName)
+            .putExtra("extra_package_name", context.packageName)
+        if (context.startSafely(miuiEditor)) return
+
+        // ③ 兜底：本应用详情页（「省电策略」在这里）
         context.startSafely(appDetailsIntent(context))
     }
 
@@ -113,10 +138,17 @@ object Permissions {
         Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS)
             .setData(Uri.fromParts("package", context.packageName, null))
 
-    private fun Context.startSafely(intent: Intent) {
-        runCatching {
-            if (this !is Activity) intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
-            startActivity(intent)
-        }
-    }
+    /**
+     * 尝试启动一个界面。
+     * @return true 表示启动成功；false 表示这个 Intent 在本机没有对应的 Activity，
+     *         调用方应该继续尝试下一个候选（而不是就此失败）。
+     *
+     * 之所以不用 resolveActivity() 预先探测：Android 11+ 有软件包可见性限制，
+     * 探测系统应用可能返回 null（假阴性）。而直接 startActivity 是不受可见性限制的，
+     * 用 try/catch 反而更准。
+     */
+    private fun Context.startSafely(intent: Intent): Boolean = runCatching {
+        if (this !is Activity) intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+        startActivity(intent)
+    }.isSuccess
 }
