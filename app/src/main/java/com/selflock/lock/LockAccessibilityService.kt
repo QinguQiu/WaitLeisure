@@ -3,6 +3,8 @@ package com.selflock.lock
 import android.accessibilityservice.AccessibilityService
 import android.content.ComponentName
 import android.content.Context
+import android.content.Intent
+import android.content.pm.PackageManager
 import android.provider.Settings
 import android.telecom.TelecomManager
 import android.view.accessibility.AccessibilityEvent
@@ -33,8 +35,12 @@ class LockAccessibilityService : AccessibilityService() {
         super.onServiceConnected()
         Repos.ensure(this)
         selfPackage = packageName
+        homePackages = resolveHomePackages()
         connected = true
-        DiagLog.add("服务", "已连接")
+        DiagLog.add(
+            "服务",
+            "已连接，桌面 = " + homePackages.joinToString("/").ifEmpty { "未识别" }
+        )
     }
 
     override fun onUnbind(intent: android.content.Intent?): Boolean {
@@ -63,7 +69,13 @@ class LockAccessibilityService : AccessibilityService() {
         if (!Repos.lockState.isLockedNow()) return
 
         // 用户刚在锁机页点了某个白名单应用 —— 这段时间不拦截。
-        if (inLaunchGrace()) {
+        //
+        // 但**桌面除外**。免打扰窗口存在的意义是放行 MIUI 的「启动应用」确认框，
+        // 不是放行桌面。实测（诊断日志）显示：窗口期内放行桌面时，用户恰好按 Home
+        // 就会停在解锁的桌面上，之后不再有任何窗口事件，锁机看起来就失效了 ——
+        // 这正是「第二次打开同一应用、退出后回到桌面」的成因。
+        if (homePackages.isEmpty()) homePackages = resolveHomePackages()
+        if (inLaunchGrace() && pkg !in homePackages) {
             DiagLog.add("窗口", "$pkg → 免打扰窗口内，放行")
             return
         }
@@ -98,6 +110,20 @@ class LockAccessibilityService : AccessibilityService() {
      * 少了输入法，用户连 PIN 都输不进去；少了系统 UI，通知和状态栏会出问题；
      * 少了拨号盘，就打不出紧急电话。
      */
+    /**
+     * 解析默认桌面的包名。
+     *
+     * 必须运行时解析而不是写死：MIUI 是 com.miui.home，别家 ROM 各不相同。
+     * 依赖 AndroidManifest 里声明的 HOME intent 查询权限，否则 Android 11+ 会返回 null。
+     */
+    private fun resolveHomePackages(): Set<String> = runCatching {
+        val intent = Intent(Intent.ACTION_MAIN).addCategory(Intent.CATEGORY_HOME)
+        @Suppress("DEPRECATION")
+        packageManager.queryIntentActivities(intent, PackageManager.MATCH_DEFAULT_ONLY)
+            .mapNotNull { it.activityInfo?.packageName }
+            .toSet()
+    }.getOrDefault(emptySet())
+
     private fun alwaysAllowedPackages(): Set<String> {
         val set = mutableSetOf(
             "android",
@@ -169,6 +195,10 @@ class LockAccessibilityService : AccessibilityService() {
         /** 本次免打扰窗口正在等待的目标应用。 */
         @Volatile
         private var graceTargetPackage: String? = null
+
+        /** 默认桌面的包名集合。免打扰窗口期间也照拦不误。 */
+        @Volatile
+        private var homePackages: Set<String> = emptySet()
 
         /** 当前是否处于「刚点了白名单应用」的免打扰窗口内。 */
         fun inLaunchGrace(): Boolean = System.currentTimeMillis() < launchGraceUntil

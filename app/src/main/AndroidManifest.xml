@@ -28,6 +28,16 @@
             <action android:name="android.intent.action.MAIN" />
             <category android:name="android.intent.category.LAUNCHER" />
         </intent>
+        <!--
+          解析默认桌面（Launcher）的包名用。
+          锁机的核心就是「把桌面挡住」，所以必须知道桌面是谁；
+          而 Android 11+ 不在这里声明就查不到其它包，resolveActivity 会返回 null。
+          同一个道理：不能把 com.miui.home 写死，换个 ROM 就废了。
+        -->
+        <intent>
+            <action android:name="android.intent.action.MAIN" />
+            <category android:name="android.intent.category.HOME" />
+        </intent>
     </queries>
 
     <application
