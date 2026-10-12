@@ -365,7 +365,7 @@ Windows PowerShell 5.1 在没有 BOM 时会按系统 ANSI 代码页（GBK）读�
 | `lifecycle-runtime-compose` 的 `LifecycleEventEffect` | `LaunchedEffect(Unit)` + 手动「重新检测」按钮 | 少一个依赖 |
 | `material-icons` 的图标 | 导航图标改用 BMP 区字符（`\u2302` / `\u2630` / `\u23F0`）；锁机页和删除按钮改用文字 | 该 artifact 已废弃；同时让源码保持纯 ASCII，规避编码问题 |
 
-**结果：`app/build.gradle.kts` 一个字都没改**，工程只用了模板自带的依赖。
+**结果：`app/build.gradle.kts` 没有为迁就依赖而改动**（唯一改动是版本号自动化，见第十一节）。
 
 ### 还没验证的部分
 
