@@ -37,7 +37,9 @@ android {
         minSdk = 26
         targetSdk = 37
         versionCode = gitCommitCount
-        versionName = "2.0.$gitCommitCount"
+        // 2.0 正式里程碑，versionName 固定为 2.0.0（不再带提交数后缀）。
+        // versionCode 仍用 gitCommitCount，保证覆盖安装时数值单调递增。
+        versionName = "2.0.0"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
