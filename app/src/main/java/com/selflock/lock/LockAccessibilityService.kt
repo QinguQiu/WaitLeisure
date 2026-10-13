@@ -5,6 +5,8 @@ import android.content.ComponentName
 import android.content.Context
 import android.content.Intent
 import android.content.pm.PackageManager
+import android.os.Handler
+import android.os.Looper
 import android.provider.Settings
 import android.telecom.TelecomManager
 import android.view.accessibility.AccessibilityEvent
@@ -101,6 +103,8 @@ class LockAccessibilityService : AccessibilityService() {
         }
 
         if (reason != "拦截") {
+            // 已经回到锁机页了，补拉没必要继续
+            if (pkg == packageName) cancelReassert()
             DiagLog.add("窗口", "$pkg → $reason")
             return
         }
@@ -109,6 +113,54 @@ class LockAccessibilityService : AccessibilityService() {
         // 以前 show() 是 runCatching 包裹后静默吞异常的，失败时毫无线索。
         val shown = LockScreenActivity.show(this)
         DiagLog.add("窗口", "$pkg → 拦截，拉起锁机页" + if (shown) "成功" else "失败")
+        scheduleReassert()
+    }
+
+    // ------------------------------------------------------------------
+    // 补拉：处理「按 Home 时和桌面切换抢跑」的竞态
+    //
+    // 按 Home 时系统是**异步**把桌面任务移到前台的，而我们的无障碍事件到得很早。
+    // 此刻系统仍认为锁机页在前台，于是 startActivity 只把 intent 投递给它
+    // （logcat 里 result code=3 = START_DELIVERED_TO_TOP），**不做任务切换**；
+    // 紧接着桌面的切换完成，用户就停在桌面上了。
+    // 成功时那条日志是 result code=2 = START_TASK_TO_FRONT。
+    //
+    // 单次按 Home 时这个竞态通常还能靠后续事件扳回来，连按两次几乎必输，
+    // 表现就是「在锁机界面连点两次 Home 就回到桌面」。
+    //
+    // 所以拉完之后隔一小段时间复查：前台如果仍然是该拦的应用，就再拉一次。
+    // 那时桌面切换早已完成，第二次 startActivity 会正常走 TASK_TO_FRONT。
+    // ------------------------------------------------------------------
+    private val mainHandler = Handler(Looper.getMainLooper())
+    private var reassertAttempts = 0
+
+    private val reassertRunnable = object : Runnable {
+        override fun run() {
+            if (!Repos.lockState.isLockedNow()) return
+            val pkg = lastPackage ?: return
+            if (pkg == packageName) return                       // 已经在锁机页，收工
+            if (pkg in lastCoreAllowed) return
+            if (Repos.whitelist.contains(pkg)) return            // 白名单应用本来就不该拦
+            if (reassertAttempts >= MAX_REASSERT_ATTEMPTS) {
+                DiagLog.add("补拉", "连续 " + reassertAttempts + " 次仍未回锁机页，放弃（前台 $pkg）")
+                return
+            }
+            reassertAttempts++
+            DiagLog.add("补拉", "第 " + reassertAttempts + " 次，前台仍是 $pkg")
+            LockScreenActivity.show(this@LockAccessibilityService)
+            mainHandler.postDelayed(this, REASSERT_DELAY_MILLIS)
+        }
+    }
+
+    private fun scheduleReassert() {
+        reassertAttempts = 0
+        mainHandler.removeCallbacks(reassertRunnable)
+        mainHandler.postDelayed(reassertRunnable, REASSERT_DELAY_MILLIS)
+    }
+
+    private fun cancelReassert() {
+        reassertAttempts = 0
+        mainHandler.removeCallbacks(reassertRunnable)
     }
 
     override fun onInterrupt() = Unit
@@ -228,6 +280,12 @@ class LockAccessibilityService : AccessibilityService() {
         /** 默认桌面的包名集合。免打扰窗口期间也照拦不误。 */
         @Volatile
         private var homePackages: Set<String> = emptySet()
+
+        /** 拉完锁机页后隔多久复查一次。太短会和桌面切换本身抢，太长用户会看到桌面闪一下。 */
+        private const val REASSERT_DELAY_MILLIS = 350L
+
+        /** 最多补拉几次，避免和 ROM 死磕。 */
+        private const val MAX_REASSERT_ATTEMPTS = 4
 
         /** 当前是否处于「刚点了白名单应用」的免打扰窗口内。 */
         fun inLaunchGrace(): Boolean = System.currentTimeMillis() < launchGraceUntil
