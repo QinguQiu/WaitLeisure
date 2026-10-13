@@ -105,7 +105,8 @@ class LockScreenActivity : ComponentActivity() {
         super.onPause()
     }
 
-    /** 允许盖在系统锁屏之上，并在触发时点亮屏幕。 */
+    /** 允许盖在系统锁屏之上，并在触发时点亮屏幕；状态栏透明，让壁纸透到底。 */
+    @Suppress("DEPRECATION")
     private fun applyLockScreenWindowFlags() {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O_MR1) {
             setShowWhenLocked(true)
@@ -116,6 +117,19 @@ class LockScreenActivity : ComponentActivity() {
                 WindowManager.LayoutParams.FLAG_SHOW_WHEN_LOCKED or
                     WindowManager.LayoutParams.FLAG_TURN_SCREEN_ON
             )
+        }
+
+        // 状态栏透明 + 内容延伸到底。
+        // 锁机页壁纸渲染在悬浮窗里，而状态栏底色由「最顶层的 Activity」决定 ——
+        // 不把它设成 edge-to-edge，状态栏会显示 Activity 主题的底色，和壁纸不同色。
+        // 设透明后，悬浮窗（FLAG_LAYOUT_NO_LIMITS）的壁纸就能透到状态栏后面。
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
+            window.setDecorFitsSystemWindows(false)
+        } else {
+            @Suppress("DEPRECATION")
+            window.addFlags(WindowManager.LayoutParams.FLAG_DRAWS_SYSTEM_BAR_BACKGROUNDS)
+            @Suppress("DEPRECATION")
+            window.statusBarColor = android.graphics.Color.TRANSPARENT
         }
     }
 
