@@ -68,16 +68,26 @@ class LockAccessibilityService : AccessibilityService() {
         // 注意这里不写诊断日志 —— 不锁机时事件量很大，会把有用的记录冲掉。
         if (!Repos.lockState.isLockedNow()) return
 
-        // 用户刚在锁机页点了某个白名单应用 —— 这段时间不拦截。
+        // 用户刚在锁机页点了某个白名单应用 —— 这段时间不拦截，
+        // 目的是放行 ROM 的「启动应用」确认框。
         //
-        // 但**桌面除外**。免打扰窗口存在的意义是放行 MIUI 的「启动应用」确认框，
-        // 不是放行桌面。实测（诊断日志）显示：窗口期内放行桌面时，用户恰好按 Home
-        // 就会停在解锁的桌面上，之后不再有任何窗口事件，锁机看起来就失效了 ——
-        // 这正是「第二次打开同一应用、退出后回到桌面」的成因。
+        // 但**桌面永远不放行**。实测（诊断日志）显示：窗口期内放行桌面时，
+        // 用户恰好按 Home 就会停在解锁的桌面上，之后不再有任何窗口事件，
+        // 锁机看起来就整个失效了。
         if (homePackages.isEmpty()) homePackages = resolveHomePackages()
-        if (inLaunchGrace() && pkg !in homePackages) {
-            DiagLog.add("窗口", "$pkg → 免打扰窗口内，放行")
-            return
+
+        if (inLaunchGrace()) {
+            if (homePackages.isEmpty()) {
+                // 认不出桌面是谁时，绝不能放行 —— 否则窗口期又会把桌面放过。
+                // 宁可让 ROM 的确认框被拦掉：那时用户会明确反馈「应用打不开」，
+                // 而放行桌面的症状是「偶尔能回桌面」，很难定位。
+                DiagLog.add("窗口", "$pkg → 免打扰窗口内，但桌面未识别，仍按拦截处理")
+            } else if (pkg !in homePackages) {
+                DiagLog.add("窗口", "$pkg → 免打扰窗口内，放行")
+                return
+            } else {
+                DiagLog.add("窗口", "$pkg → 免打扰窗口内，但它是桌面，照拦")
+            }
         }
 
         val core = alwaysAllowedPackages()
@@ -115,14 +125,33 @@ class LockAccessibilityService : AccessibilityService() {
      *
      * 必须运行时解析而不是写死：MIUI 是 com.miui.home，别家 ROM 各不相同。
      * 依赖 AndroidManifest 里声明的 HOME intent 查询权限，否则 Android 11+ 会返回 null。
+     *
+     * 两条策略取并集，因为单独任何一条都可能漏：
+     *   ① resolveActivity + MATCH_DEFAULT_ONLY —— 最常见写法，但它要求 HOME 的
+     *      intent-filter 里带 CATEGORY_DEFAULT；有些 ROM 就是不写，于是返回 null。
+     *   ② queryIntentActivities 不带 flag —— 不看 CATEGORY_DEFAULT，把 ① 漏掉的捞回来。
+     *
+     * 只用 ① 正是 v1.0.13 失效的原因：MIUI 上拿到空集合，而空集合会让
+     * 「不在桌面包里」恒为真，等于免打扰窗口又变回「放行一切」。
      */
-    private fun resolveHomePackages(): Set<String> = runCatching {
-        val intent = Intent(Intent.ACTION_MAIN).addCategory(Intent.CATEGORY_HOME)
-        @Suppress("DEPRECATION")
-        packageManager.queryIntentActivities(intent, PackageManager.MATCH_DEFAULT_ONLY)
-            .mapNotNull { it.activityInfo?.packageName }
-            .toSet()
-    }.getOrDefault(emptySet())
+    private fun resolveHomePackages(): Set<String> {
+        val found = mutableSetOf<String>()
+
+        runCatching {
+            val intent = Intent(Intent.ACTION_MAIN).addCategory(Intent.CATEGORY_HOME)
+            packageManager.resolveActivity(intent, PackageManager.MATCH_DEFAULT_ONLY)
+                ?.activityInfo?.packageName?.let { found += it }
+        }
+
+        runCatching {
+            val intent = Intent(Intent.ACTION_MAIN).addCategory(Intent.CATEGORY_HOME)
+            @Suppress("DEPRECATION")
+            packageManager.queryIntentActivities(intent, 0)
+                .forEach { info -> info.activityInfo?.packageName?.let { found += it } }
+        }
+
+        return found
+    }
 
     private fun alwaysAllowedPackages(): Set<String> {
         val set = mutableSetOf(
