@@ -19,6 +19,20 @@
       不经过 Activity 启动，那道墙管不到。
     -->
     <uses-permission android:name="android.permission.SYSTEM_ALERT_WINDOW" />
+    <!--
+      「获取应用列表」。Android 11+ 默认只让应用看到自己 + 在 queries 里声明过的包；
+      MIUI 把它单列为一项权限。没有它，queryIntentActivities / getInstalledPackages
+      可能返回空集 —— 那会直接让「识别默认桌面」失败，而桌面正是锁机要挡的对象。
+    -->
+    <uses-permission android:name="android.permission.QUERY_ALL_PACKAGES"
+        tools:ignore="QueryAllPackagesPermission" />
+    <!--
+      「使用情况访问」。无障碍之外的第二条「看前台应用」的信号源。
+      无障碍服务有「系统说绑定、实际没在收事件」的坑（真机+模拟器都复现过），
+      使用情况访问走系统记账，独立一条路。对应系统设置里的「使用情况访问权限」。
+    -->
+    <uses-permission android:name="android.permission.PACKAGE_USAGE_STATS"
+        tools:ignore="ProtectedPermissions" />
 
     <!-- 锁机期间常驻通知 -->
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />

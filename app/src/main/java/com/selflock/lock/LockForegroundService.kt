@@ -5,6 +5,7 @@ import android.content.Intent
 import android.os.IBinder
 import com.selflock.data.Repos
 import com.selflock.util.DiagLog
+import com.selflock.util.ForegroundDetector
 import com.selflock.util.Notifications
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -68,49 +69,45 @@ class LockForegroundService : Service() {
                 }
 
                 // 免打扰窗口刚结束的那一刻补一次检查。
-                // 场景：用户在窗口内把锁机页丢到后台（比如按了 Home、或点了「拒绝」后
-                // 停在别处），此后再没有窗口切换事件，无障碍服务不会主动发现。
                 val inGrace = LockAccessibilityService.inLaunchGrace()
                 if (wasInGrace && !inGrace && LockAccessibilityService.isForegroundBlocked()) {
-                    LockScreenActivity.show(this@LockForegroundService)
+                    LockOverlay.show(this@LockForegroundService, "免打扰结束")
                 }
                 wasInGrace = inGrace
 
-                // ----------------------------------------------------------
-                // 「逃逸」看门狗
+                // 「逃逸」看门狗。
                 //
-                // 为什么需要：连续快速按 Home 时系统会丢弃一部分窗口事件。
-                // 真机实测（adb 无间隔连按 5 次）：只收到 2 次桌面事件、紧接着
-                // 一条「回到自己」，服务据此认为已经拦住了；可剩下的按键仍在把
-                // 桌面往上推，而且此后不再产生任何事件 —— 结果停在桌面上。
+                // 悬浮窗是常驻窗口，正常盖上一次就一直在；这里做的是兜底：
+                // 万一它因为某种竞态被撤掉了，而前台又不是白名单应用，就重新盖上。
                 //
-                // 无障碍服务里那套 1.4 秒的补拉不够用：MIUI 对短时间内反复拉起
-                // Activity 有类似限流的处理，实测连续 4 次全部被拒。所以改成锁机
-                // 期间持续复查，每秒一次，直到真的回到锁机页。
-                //
-                // 判据刻意收得很窄，只在「确定用户没有正当理由停留在别处」时才动手：
-                //   - 锁机页确实不在前台（Activity 的真实状态，不会被丢事件骗到）
-                //   - 不在免打扰窗口内（否则会打断 ROM 的「启动应用」确认框）
-                //   - 最近前台包名要么是自己（事件被丢弃后留下的旧值）、要么为空、
-                //     要么是桌面 —— 绝不打断正在使用白名单应用的用户
-                // ----------------------------------------------------------
-                if (!LockScreenActivity.isResumed && !inGrace) {
-                    val pkg = LockAccessibilityService.lastSeenPackage()
-                    val lost = pkg == null ||
-                        pkg == packageName ||
-                        LockAccessibilityService.isHomePackage(pkg)
-                    if (lost) {
+                // 判据只认「确定前台是白名单应用」才不动手，其余一律盖上（宁可多盖，不可漏）：
+                //   - 桌面 / 其他非白名单应用 → 盖上
+                //   - 前台未知（无障碍假绑定时 lastPackage 一直是 null）→ 盖上，
+                //     但先用使用情况访问兜底确认，避免误盖正在用的白名单应用
+                if (!inGrace) {
+                    var pkg = LockAccessibilityService.lastSeenPackage()
+                    if (pkg == null) {
+                        // 无障碍「假绑定」时 lastPackage 一直是 null，用使用情况访问兜底
+                        pkg = ForegroundDetector.currentForegroundPackage(this@LockForegroundService)
+                    }
+                    val definitelyWhitelisted = pkg != null && Repos.whitelist.contains(pkg)
+
+                    if (definitelyWhitelisted) {
+                        // 白名单应用在前台：悬浮窗让开，用户才能用它。
+                        // 这是无障碍之外的第二条「让开」路径 —— 无障碍假绑定时也能生效。
+                        if (LockOverlay.isShowing) {
+                            LockOverlay.hide()
+                        }
+                        escapeAttempts = 0
+                    } else if (!LockOverlay.isShowing) {
                         escapeAttempts++
                         if (escapeAttempts <= 3 || escapeAttempts % 10 == 0) {
                             DiagLog.add(
                                 "看门狗",
-                                "锁机页不在前台，第 " + escapeAttempts + " 次换手拉起（lastPkg=" + pkg + "）"
+                                "悬浮窗不在，第 " + escapeAttempts + " 次盖上（pkg=" + pkg + "）"
                             )
                         }
-                        // 遮罩是这里的主力：它不经过 Activity 启动，MIUI 拦不住。
                         LockOverlay.show(this@LockForegroundService, "看门狗")
-                        // 同时继续尝试把锁机页拉回来（成功的话用户能操作白名单图标）
-                        LockScreenActivity.show(this@LockForegroundService)
                     } else {
                         escapeAttempts = 0
                     }
@@ -132,7 +129,7 @@ class LockForegroundService : Service() {
         scope.launch {
             delay(800L)
             if (Repos.lockState.isLockedNow() && LockAccessibilityService.isForegroundBlocked()) {
-                LockScreenActivity.show(this@LockForegroundService)
+                LockOverlay.show(this@LockForegroundService, "启动复检")
             }
         }
     }

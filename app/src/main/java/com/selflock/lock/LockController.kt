@@ -17,6 +17,10 @@ object LockController {
         Repos.ensure(context)
         Repos.lockState.lockUntil(untilMillis, scheduleId)
         startService(context)
+        // 悬浮窗优先：锁机界面就是它，秒显、常驻、不经过 Activity 启动，MIUI 拦不住。
+        LockOverlay.show(context, "锁机")
+        // LockScreenActivity 保留为第二层：只有它能「点亮屏幕 / 盖在系统锁屏上」，
+        // 处理定时锁机在息屏状态触发时要把屏幕唤醒的场景。
         LockScreenActivity.show(context)
     }
 

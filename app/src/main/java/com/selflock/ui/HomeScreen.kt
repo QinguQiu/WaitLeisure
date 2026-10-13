@@ -62,13 +62,15 @@ data class PermissionSnapshot(
     val notification: Boolean,
     val battery: Boolean,
     val deviceAdmin: Boolean,
-    val overlay: Boolean
+    val overlay: Boolean,
+    val usageStats: Boolean
 ) {
     val okCount: Int
-        get() = listOf(accessibility, exactAlarm, notification, battery, deviceAdmin, overlay)
-            .count { it }
+        get() = listOf(
+            accessibility, exactAlarm, notification, battery, deviceAdmin, overlay, usageStats
+        ).count { it }
 
-    val allOk: Boolean get() = okCount == 6
+    val allOk: Boolean get() = okCount == 7
 
     companion object {
         fun of(context: Context) = PermissionSnapshot(
@@ -77,7 +79,8 @@ data class PermissionSnapshot(
             notification = Permissions.areNotificationsEnabled(context),
             battery = Permissions.isIgnoringBatteryOptimizations(context),
             deviceAdmin = Permissions.isDeviceAdminActive(context),
-            overlay = Permissions.canDrawOverlays(context)
+            overlay = Permissions.canDrawOverlays(context),
+            usageStats = Permissions.canReadUsageStats(context)
         )
     }
 }
@@ -147,7 +150,7 @@ fun HomeScreen() {
 
         SectionCard(
             title = "权限体检",
-            subtitle = "已就绪 ${perms.okCount} / 6 · 缺任何一项都会让锁机漏风"
+            subtitle = "已就绪 ${perms.okCount} / 7 · 缺任何一项都会让锁机漏风"
         ) {
             CheckRow(
                 ok = perms.accessibility,
@@ -192,9 +195,36 @@ fun HomeScreen() {
                 actionLabel = "去授权",
                 onAction = { Permissions.openOverlaySettings(context) }
             )
+            CheckRow(
+                ok = perms.usageStats,
+                title = "使用情况访问",
+                description = "前台应用的第二信号源。无障碍服务「绑定但没收事件」时用它兜底",
+                actionLabel = "去授权",
+                onAction = { Permissions.openUsageAccessSettings(context) }
+            )
             Spacer(Modifier.height(4.dp))
             TextButton(onClick = { refreshKey++ }) {
                 Text("重新检测")
+            }
+        }
+
+        // MIUI 的「后台弹出界面」不在上面的体检里 —— 它是 MIUI 自加的权限，
+        // 没有 AOSP 接口可以查询，只能引导用户去开关。
+        SectionCard(
+            title = "MIUI 专属：后台弹出界面",
+            subtitle = "不在这张体检表里（MIUI 自加权限，查不到状态）"
+        ) {
+            Text(
+                text = "它才是「允许应用从后台弹出界面」的正式开关。开了它，锁机页被 Home 推到后台后\n" +
+                    "也能顺利回到前台，不再依赖遮罩兜底。\n\n" +
+                    "如果连点几次 Home 还是能回到桌面，多半就是它没开。",
+                fontSize = 12.sp,
+                lineHeight = 17.sp,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+            Spacer(Modifier.height(4.dp))
+            TextButton(onClick = { Permissions.openMiuiPermissionEditor(context) }) {
+                Text("打开 MIUI 权限页")
             }
         }
 

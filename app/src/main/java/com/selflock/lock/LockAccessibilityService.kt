@@ -109,24 +109,53 @@ class LockAccessibilityService : AccessibilityService() {
         }
 
         if (reason != "拦截") {
-            // 白名单/自身/核心界面在前台，遮罩必须撤掉，否则会把用户正常用的应用挡住。
-            // 注意：这里**不能**因为「回到锁机页」就取消补拉 ——
-            // 事件可能被系统丢掉（见 reassertRunnable 里的实测数据），
-            // 真正的判据是 LockScreenActivity.isResumed，在补拉逻辑里检查。
-            LockOverlay.hide()
+            // 什么时候可以撤遮罩，判据要很小心 —— 这里踩过一个坑：
+            //
+            // **遮罩窗口本身也是 com.selflock 的窗口**。它一盖上就产生一条
+            // pkg=com.selflock 的窗口事件；如果只看包名就撤遮罩，就会变成死循环：
+            //   看门狗盖上遮罩 → 事件说「回到自己」→ 撤下 → 看门狗发现锁机页不在前台 → 再盖上……
+            // 真机实测就是这个循环，日志里每秒一次「已盖上/已撤下」，看门狗累计到 80 次。
+            //
+            // 所以撤遮罩只有两种情况：
+            //   1. 前台是白名单应用 —— 用户本来就该用它；
+            //   2. 前台是自己、**并且锁机页 Activity 真的 resumed** —— 这才说明真回到了锁机页。
+            // 「核心放行」（systemui 等）刻意不撤：它们只是盖在上面，
+            // 撤了反而会露出下面的桌面。
+            //
+            // 另：这里也不能因为「回到锁机页」就取消补拉 —— 事件会被系统丢掉，
+            // 真正的判据同样是 isResumed，在补拉逻辑里检查。
+            val whitelisted = Repos.whitelist.contains(pkg)
+
+            // 「回到锁机页」要同时满足三条，缺一条就会出问题：
+            //
+            //   1. 包名是自己；
+            //   2. 这个窗口事件**确实来自锁机页 Activity**（className 对得上）；
+            //   3. 锁机页 Activity 真的 resumed。
+            //
+            // 第 2 条是补上的 —— 只靠第 3 条不够：isResumed 有延迟。
+            // 实测的闪烁序列是：
+            //   按 Home → 桌面事件 → 盖上遮罩 → 遮罩产生一条 pkg=com.selflock 的事件
+            //   → 此刻锁机页的 isResumed 还没来得及变 false → 判定「回到锁机页」→ 撤下
+            //   → 桌面露出来 → 看门狗再盖上 → 每秒循环，屏幕黑底一闪一闪。
+            //
+            // 遮罩窗口的 className 不是 Activity，第 2 条能把它排除掉。
+            val fromLockScreenActivity =
+                event.className?.toString() == LockScreenActivity::class.java.name
+            val reallyBackOnLockScreen = pkg == packageName &&
+                fromLockScreenActivity &&
+                LockScreenActivity.isResumed
+            if (whitelisted || reallyBackOnLockScreen) {
+                LockOverlay.hide()
+            }
             DiagLog.add("窗口", "$pkg → $reason")
             return
         }
 
-        // 先盖遮罩，再试着拉锁机页。
-        // 遮罩不经过 Activity 启动，MIUI 的防劫持墙拦不住它 ——
-        // 所以即使锁机页拉不起来（连点 Home 时必然发生），桌面也已经被挡住了。
+        // 拦截：只盖悬浮窗，不再启动 Activity。
+        // 悬浮窗是常驻窗口，盖上一次就一直在；而且它不经过 Activity 启动，
+        // MIUI 的防劫持墙（拒绝被 Home 切到后台的 Activity 再回来）完全管不到它。
         LockOverlay.show(this, pkg)
-
-        // 关键：把 startActivity 的成功/失败也记下来。
-        // 以前 show() 是 runCatching 包裹后静默吞异常的，失败时毫无线索。
-        val shown = LockScreenActivity.show(this)
-        DiagLog.add("窗口", "$pkg → 拦截，拉起锁机页" + if (shown) "成功" else "失败")
+        DiagLog.add("窗口", "$pkg → 拦截，盖悬浮窗")
         scheduleReassert()
     }
 
@@ -156,10 +185,10 @@ class LockAccessibilityService : AccessibilityService() {
                 return
             }
 
-            // 判据是 Activity 的真实状态，而不是「最后一个事件是不是自己」。
+            // 判据是「悬浮窗还在不在」，而不是「最后一个事件是不是自己」。
             // 后者会被丢弃的事件骗到：连按 Home 时服务先看到几条第桌面事件，
             // 再看到一条「回到自己」就以为拦住了，可剩下的按键还在把桌面往上推。
-            if (LockScreenActivity.isResumed) {
+            if (LockOverlay.isShowing) {
                 cancelReassert()
                 return
             }
@@ -177,11 +206,9 @@ class LockAccessibilityService : AccessibilityService() {
                 return
             }
             reassertAttempts++
-            DiagLog.add("补拉", "第 " + reassertAttempts + " 次：锁机页不在前台（lastPkg=" + pkg + "）")
-            // 这里不能直接再拉锁机页：MIUI 会拒绝刚被 Home 切到后台的那个 Activity
-            // （实测 startActivity 恒返回 code=3，且日志里有 Permission Denied Activity）。
-            // 改用「换手」页把应用带回前台，它再负责拉锁机页。
-            LockScreenActivity.show(this@LockAccessibilityService)
+            DiagLog.add("补拉", "第 " + reassertAttempts + " 次：悬浮窗不在（lastPkg=" + pkg + "）")
+            // 悬浮窗是窗口不是 Activity，重试盖上即可，MIUI 拦不住。
+            LockOverlay.show(this@LockAccessibilityService, "补拉")
             mainHandler.postDelayed(this, REASSERT_DELAY_MILLIS)
         }
     }

@@ -83,6 +83,10 @@ class LockScreenActivity : ComponentActivity() {
 
         setContent {
             MaterialTheme(colorScheme = darkColorScheme()) {
+                // 吞掉返回键，防止用返回手势溜出去。
+                // 放在 Activity 层而不是 LockScreenRoute 里：悬浮窗（ComposeView）里没有
+                // OnBackPressedDispatcherOwner，BackHandler 会直接崩。
+                BackHandler(enabled = true) { /* 故意留空 */ }
                 LockScreenRoute(onExit = { finish() })
             }
         }
@@ -164,7 +168,7 @@ class LockScreenActivity : ComponentActivity() {
 }
 
 @Composable
-private fun LockScreenRoute(onExit: () -> Unit) {
+internal fun LockScreenRoute(onExit: () -> Unit) {
     val context = LocalContext.current
 
     // 每秒 tick 一次：同时驱动大时钟和「剩余时间」
@@ -184,9 +188,6 @@ private fun LockScreenRoute(onExit: () -> Unit) {
             onExit()
         }
     }
-
-    // 吞掉返回键，防止用返回手势溜出去
-    BackHandler(enabled = true) { /* 故意留空 */ }
 
     LockScreen(
         now = now,

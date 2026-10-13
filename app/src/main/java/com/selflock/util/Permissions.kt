@@ -3,6 +3,7 @@ package com.selflock.util
 import android.accessibilityservice.AccessibilityServiceInfo
 import android.app.Activity
 import android.app.AlarmManager
+import android.app.AppOpsManager
 import android.app.admin.DevicePolicyManager
 import android.content.ComponentName
 import android.content.Context
@@ -10,6 +11,7 @@ import android.content.Intent
 import android.net.Uri
 import android.os.Build
 import android.os.PowerManager
+import android.os.Process
 import android.provider.Settings
 import android.view.accessibility.AccessibilityManager
 import androidx.core.app.NotificationManagerCompat
@@ -82,6 +84,25 @@ object Permissions {
         Settings.canDrawOverlays(context)
     }.getOrDefault(false)
 
+    /**
+     * 打开 MIUI 的权限编辑页。
+     *
+     * 「后台弹出界面」是 MIUI 自己加的权限，AOSP 没有对应接口，既查不到也开不了开关，
+     * 只能把用户送到那个页面。位置在各 MIUI 版本里不一致，所以给两层兜底：
+     * 先试 MIUI 权限编辑页，失败再落到本应用详情页。
+     */
+    fun openMiuiPermissionEditor(context: Context) {
+        val editor = Intent("miui.intent.action.APP_PERM_EDITOR").apply {
+            setClassName(
+                "com.miui.securitycenter",
+                "com.miui.permcenter.permissions.PermissionsEditorActivity"
+            )
+            putExtra("extra_pkgname", context.packageName)
+        }
+        if (context.startSafely(editor)) return
+        context.startSafely(appDetailsIntent(context))
+    }
+
     fun openOverlaySettings(context: Context) {
         context.startSafely(
             Intent(
@@ -89,6 +110,36 @@ object Permissions {
                 Uri.parse("package:" + context.packageName)
             )
         )
+    }
+
+    /**
+     * 「使用情况访问」是否已授权。
+     *
+     * 它是无障碍之外的第二条「看前台应用」的信号源。无障碍服务有「绑定但没收事件」的坑，
+     * 使用情况访问走的是系统记账，独立一条路。双保险，跟「远离手机」的做法一致。
+     */
+    @Suppress("DEPRECATION")
+    fun canReadUsageStats(context: Context): Boolean = runCatching {
+        val am = context.getSystemService(AppOpsManager::class.java) ?: return false
+        val mode = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+            am.unsafeCheckOpNoThrow(
+                AppOpsManager.OPSTR_GET_USAGE_STATS,
+                Process.myUid(),
+                context.packageName
+            )
+        } else {
+            @Suppress("DEPRECATION")
+            am.checkOpNoThrow(
+                AppOpsManager.OPSTR_GET_USAGE_STATS,
+                Process.myUid(),
+                context.packageName
+            )
+        }
+        mode == AppOpsManager.MODE_ALLOWED
+    }.getOrDefault(false)
+
+    fun openUsageAccessSettings(context: Context) {
+        context.startSafely(Intent(Settings.ACTION_USAGE_ACCESS_SETTINGS))
     }
 
     fun canScheduleExactAlarms(context: Context): Boolean {
