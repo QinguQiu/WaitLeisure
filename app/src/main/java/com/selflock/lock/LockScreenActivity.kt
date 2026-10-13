@@ -15,21 +15,23 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardOptions
-import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.darkColorScheme
@@ -375,11 +377,31 @@ private fun PinDialog(onDismiss: () -> Unit, onSuccess: () -> Unit) {
     var pin by remember { mutableStateOf("") }
     var wrong by remember { mutableStateOf(false) }
 
-    AlertDialog(
-        onDismissRequest = onDismiss,
-        title = { Text(stringResource(R.string.lock_unlock)) },
-        text = {
-            Column {
+    // 悬浮窗里不能弹 Dialog：没有 Activity 的 window token，Dialog.show() 会抛
+    // BadTokenException（Unable to add window -- token null is not valid）。
+    // 所以改成内嵌遮罩 + 居中卡片，渲染在悬浮窗自己的窗口里。
+    Box(
+        modifier = Modifier
+            .fillMaxSize()
+            .background(Color(0xE6000000)),
+        contentAlignment = Alignment.Center
+    ) {
+        Surface(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 32.dp),
+            shape = RoundedCornerShape(16.dp),
+            color = Color(0xFF1C1C1E)
+        ) {
+            Column(Modifier.padding(24.dp)) {
+                Text(
+                    text = stringResource(R.string.lock_unlock),
+                    color = Color.White,
+                    fontSize = 18.sp,
+                    fontWeight = FontWeight.SemiBold
+                )
+                Spacer(Modifier.height(16.dp))
+
                 if (hasPin) {
                     OutlinedTextField(
                         value = pin,
@@ -395,8 +417,13 @@ private fun PinDialog(onDismiss: () -> Unit, onSuccess: () -> Unit) {
                     )
                 } else {
                     // 没设 PIN 就直接放行，绝不把自己锁在门外
-                    Text(stringResource(R.string.lock_no_pin_notice))
+                    Text(
+                        text = stringResource(R.string.lock_no_pin_notice),
+                        color = Color(0xFF9E9E9E),
+                        fontSize = 13.sp
+                    )
                 }
+
                 if (wrong) {
                     Spacer(Modifier.height(8.dp))
                     Text(
@@ -405,19 +432,21 @@ private fun PinDialog(onDismiss: () -> Unit, onSuccess: () -> Unit) {
                         fontSize = 12.sp
                     )
                 }
+
+                Spacer(Modifier.height(20.dp))
+                Row(
+                    horizontalArrangement = Arrangement.End,
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    TextButton(onClick = onDismiss) { Text(stringResource(R.string.action_cancel)) }
+                    Spacer(Modifier.width(8.dp))
+                    TextButton(onClick = {
+                        if (!hasPin || Pin.verify(pin, Repos.prefs.pinHash)) onSuccess() else wrong = true
+                    }) { Text(stringResource(R.string.action_confirm)) }
+                }
             }
-        },
-        confirmButton = {
-            TextButton(onClick = {
-                if (!hasPin || Pin.verify(pin, Repos.prefs.pinHash)) onSuccess() else wrong = true
-            }) {
-                Text(stringResource(R.string.action_confirm))
-            }
-        },
-        dismissButton = {
-            TextButton(onClick = onDismiss) { Text(stringResource(R.string.action_cancel)) }
         }
-    )
+    }
 }
 
 @Composable
