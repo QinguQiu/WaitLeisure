@@ -27,6 +27,9 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.items
+import androidx.compose.foundation.pager.HorizontalPager
+import androidx.compose.foundation.pager.rememberPagerState
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
@@ -44,6 +47,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.blur
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.asImageBitmap
@@ -219,6 +223,9 @@ internal fun LockScreenRoute(onExit: () -> Unit) {
     )
 }
 
+/** 锁机页应用页的背景模糊半径上限（dp）。 */
+private const val MAX_BLUR_DP = 26f
+
 @Composable
 private fun LockScreen(
     now: Long,
@@ -228,7 +235,7 @@ private fun LockScreen(
 ) {
     var showPinDialog by remember { mutableStateOf(false) }
 
-    // 壁纸：有自定义图片就用图（压一层半透明黑保证文字可读），否则用纯色。
+    // 壁纸：有自定义图片就用图，否则用纯色
     val wallpaper = remember {
         val path = Repos.prefs.wallpaperImagePath
         if (path != null) {
@@ -238,91 +245,71 @@ private fun LockScreen(
         }
     }
 
+    val pagerState = rememberPagerState(pageCount = { 3 })
+
+    // 模糊度跟着滑动位置走：中间那页（应用页）最糊，时间页/退出页清晰，
+    // 滑动过程中连续过渡。pos 是 0..2 的连续位置，|pos-1| 越小越靠近应用页。
+    val pos = pagerState.currentPage + pagerState.currentPageOffsetFraction
+    val blurFraction = (1f - kotlin.math.abs(pos - 1f)).coerceIn(0f, 1f)
+    val blurDp = (blurFraction * MAX_BLUR_DP).dp
+
+    // Modifier.blur 只在 Android 12+ 生效。更低版本退化成压一层暗色 ——
+    // 宁可暗一点保证白字可读，也不能让文字糊在花哨的壁纸上看不清。
+    val canBlur = Build.VERSION.SDK_INT >= Build.VERSION_CODES.S
+
     Box(modifier = Modifier.fillMaxSize()) {
         if (wallpaper != null) {
             Image(
                 bitmap = wallpaper,
                 contentDescription = null,
                 contentScale = ContentScale.Crop,
-                modifier = Modifier.fillMaxSize()
+                modifier = Modifier
+                    .fillMaxSize()
+                    .then(if (canBlur) Modifier.blur(blurDp) else Modifier)
             )
+            if (!canBlur) {
+                Box(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .background(Color.Black.copy(alpha = 0.45f))
+                )
+            }
+        } else {
             Box(
                 modifier = Modifier
                     .fillMaxSize()
-                    .background(Color.Black.copy(alpha = 0.45f))
+                    .background(Color(Repos.prefs.wallpaperColor))
             )
         }
 
-        Column(
+        HorizontalPager(
+            state = pagerState,
+            modifier = Modifier.fillMaxSize()
+        ) { page ->
+            when (page) {
+                0 -> TimePage(now)
+                1 -> AppsPage(whitelist = whitelist, onLaunchApp = onLaunchApp)
+                else -> ExitPage(now = now, onUnlock = { showPinDialog = true })
+            }
+        }
+
+        // 页码指示点
+        Row(
             modifier = Modifier
-                .fillMaxSize()
-                .background(if (wallpaper == null) Color(Repos.prefs.wallpaperColor) else Color.Transparent)
-                .padding(horizontal = 24.dp),
-            horizontalAlignment = Alignment.CenterHorizontally
+                .align(Alignment.BottomCenter)
+                .padding(bottom = 14.dp),
+            horizontalArrangement = Arrangement.spacedBy(6.dp)
         ) {
-            Spacer(Modifier.height(64.dp))
-
-            Text(
-                text = remember(now) {
-                    SimpleDateFormat("HH:mm", Locale.getDefault()).format(Date(now))
-                },
-                color = Color.White,
-                fontSize = 68.sp,
-                fontWeight = FontWeight.Light
-            )
-
-            Text(
-                text = remember(now) {
-                    SimpleDateFormat("M月d日 EEEE", Locale.CHINA).format(Date(now))
-                },
-                color = Color(0xFF9E9E9E),
-                fontSize = 14.sp
-            )
-
-            Spacer(Modifier.height(24.dp))
-
-            Text(
-                text = "\uD83D\uDD12",
-                fontSize = 24.sp
-            )
-
-            Spacer(Modifier.height(8.dp))
-
-            Text(
-                text = stringResource(R.string.lock_title),
-                color = Color.White,
-                fontSize = 19.sp,
-                fontWeight = FontWeight.SemiBold
-            )
-
-            Spacer(Modifier.height(4.dp))
-
-            Text(
-                text = remainingText(now),
-                color = Color(0xFF9E9E9E),
-                fontSize = 13.sp
-            )
-
-            Spacer(Modifier.height(32.dp))
-
-            WhitelistSection(
-                packages = whitelist,
-                onLaunch = onLaunchApp,
-                modifier = Modifier.weight(1f)
-            )
-
-            // 「允许密码解锁」开关关闭时，不显示解锁按钮 —— 严格锁，只能等时间到。
-            if (Repos.prefs.allowPinUnlock) {
-                OutlinedButton(
-                    onClick = { showPinDialog = true },
+            repeat(3) { i ->
+                val active = pagerState.currentPage == i
+                Box(
                     modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(bottom = 40.dp)
-                ) {
-                    Text(stringResource(R.string.lock_unlock))
-                }
-            } else {
-                Spacer(Modifier.height(40.dp))
+                        .size(if (active) 8.dp else 6.dp)
+                        .clip(CircleShape)
+                        .background(
+                            if (active) Color.White else Color.White.copy(alpha = 0.35f)
+                        )
+                )
             }
         }
     }
@@ -335,6 +322,140 @@ private fun LockScreen(
                 onUnlock()
             }
         )
+    }
+}
+
+/** 第一页：时间 + 倒计时。背景保持清晰。 */
+@Composable
+private fun TimePage(now: Long) {
+    Column(
+        modifier = Modifier
+            .fillMaxSize()
+            .padding(horizontal = 24.dp),
+        horizontalAlignment = Alignment.CenterHorizontally,
+        verticalArrangement = Arrangement.Center
+    ) {
+        Text(
+            text = remember(now) {
+                SimpleDateFormat("HH:mm", Locale.getDefault()).format(Date(now))
+            },
+            color = Color.White,
+            fontSize = 72.sp,
+            fontWeight = FontWeight.Light
+        )
+
+        Text(
+            text = remember(now) {
+                SimpleDateFormat("M月d日 EEEE", Locale.CHINA).format(Date(now))
+            },
+            color = Color(0xFFB0B0B0),
+            fontSize = 14.sp
+        )
+
+        Spacer(Modifier.height(26.dp))
+
+        Text(text = "\uD83D\uDD12", fontSize = 24.sp)
+
+        Spacer(Modifier.height(8.dp))
+
+        Text(
+            text = stringResource(R.string.lock_title),
+            color = Color.White,
+            fontSize = 19.sp,
+            fontWeight = FontWeight.SemiBold
+        )
+
+        Spacer(Modifier.height(6.dp))
+
+        Text(
+            text = remainingText(now),
+            color = Color(0xFFB0B0B0),
+            fontSize = 13.sp
+        )
+
+        // 番茄钟进行中就顺带显示当前相位，省得用户猜现在能不能玩手机
+        val pomo = Pomodoro.current()
+        if (pomo != null) {
+            Spacer(Modifier.height(14.dp))
+            Text(
+                text = "\uD83C\uDF45 " + pomo.first + " 组 · " +
+                    if (pomo.second == "focus") "专注中" else "休息中",
+                color = Color(0xFFFFB74D),
+                fontSize = 13.sp
+            )
+        }
+    }
+}
+
+/** 第二页：白名单应用。背景模糊。 */
+@Composable
+private fun AppsPage(whitelist: List<String>, onLaunchApp: (String) -> Unit) {
+    Column(
+        modifier = Modifier
+            .fillMaxSize()
+            .padding(horizontal = 20.dp),
+        horizontalAlignment = Alignment.CenterHorizontally
+    ) {
+        Spacer(Modifier.height(72.dp))
+        WhitelistSection(
+            packages = whitelist,
+            onLaunch = onLaunchApp,
+            modifier = Modifier.weight(1f)
+        )
+    }
+}
+
+/** 第三页：退出。背景保持清晰。 */
+@Composable
+private fun ExitPage(now: Long, onUnlock: () -> Unit) {
+    Column(
+        modifier = Modifier
+            .fillMaxSize()
+            .padding(horizontal = 28.dp),
+        horizontalAlignment = Alignment.CenterHorizontally,
+        verticalArrangement = Arrangement.Center
+    ) {
+        if (Repos.prefs.allowPinUnlock) {
+            Text(text = "\uD83D\uDD13", fontSize = 28.sp)
+            Spacer(Modifier.height(10.dp))
+            Text(
+                text = "输入 PIN 可提前解除锁定",
+                color = Color(0xFFB0B0B0),
+                fontSize = 13.sp,
+                textAlign = TextAlign.Center
+            )
+            Spacer(Modifier.height(20.dp))
+            OutlinedButton(
+                onClick = onUnlock,
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                Text(stringResource(R.string.lock_unlock))
+            }
+        } else {
+            // 严格模式：解不开，只能等
+            Text(text = "\u23F3", fontSize = 28.sp)
+            Spacer(Modifier.height(10.dp))
+            Text(
+                text = "严格模式已开启 —— 本次锁定期间无法解除",
+                color = Color.White,
+                fontSize = 15.sp,
+                fontWeight = FontWeight.SemiBold,
+                textAlign = TextAlign.Center
+            )
+            Spacer(Modifier.height(8.dp))
+            Text(
+                text = remainingText(now),
+                color = Color(0xFFB0B0B0),
+                fontSize = 13.sp
+            )
+            Spacer(Modifier.height(10.dp))
+            Text(
+                text = "「允许密码解锁」在设置页可以重新打开",
+                color = Color(0xFF808080),
+                fontSize = 11.sp,
+                textAlign = TextAlign.Center
+            )
+        }
     }
 }
 

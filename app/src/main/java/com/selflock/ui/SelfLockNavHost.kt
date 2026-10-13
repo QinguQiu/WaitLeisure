@@ -28,14 +28,15 @@ import androidx.compose.ui.Modifier
  * 导航图标用 BMP 区字符（\uXXXX 转义），不依赖 material-icons 那个 artifact，
  * 同时保证源码本身保持纯 ASCII，避免任何编码问题。
  */
-private enum class Screen { Home, Whitelist, Schedules, ScheduleEdit }
+private enum class Screen { Home, Whitelist, Schedules, ScheduleEdit, Settings }
 
 private data class Tab(val screen: Screen, val label: String, val glyph: String)
 
 private val TABS = listOf(
     Tab(Screen.Home, "\u9996\u9875", "\u2302"),
     Tab(Screen.Whitelist, "\u767d\u540d\u5355", "\u2630"),
-    Tab(Screen.Schedules, "\u5b9a\u65f6", "\u23F0")
+    Tab(Screen.Schedules, "\u5b9a\u65f6", "\u23F0"),
+    Tab(Screen.Settings, "\u8bbe\u7f6e", "\u2699")
 )
 
 @Composable
@@ -45,7 +46,8 @@ fun SelfLockNavHost() {
 
     val showBottomBar = screen == Screen.Home ||
         screen == Screen.Whitelist ||
-        screen == Screen.Schedules
+        screen == Screen.Schedules ||
+        screen == Screen.Settings
 
     // 只有编辑页需要拦返回键；其余页面交给系统默认行为
     BackHandler(enabled = screen == Screen.ScheduleEdit) {
@@ -85,6 +87,8 @@ fun SelfLockNavHost() {
                     scheduleId = editingId,
                     onDone = { screen = Screen.Schedules }
                 )
+
+                Screen.Settings -> SettingsScreen()
             }
         }
     }

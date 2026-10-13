@@ -43,7 +43,8 @@ class LockForegroundService : Service() {
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
         Repos.ensure(this)
-        if (!Repos.lockState.isLockedNow()) {
+        // 番茄钟的休息时段锁是开的，但服务必须继续活着才能推进到下一组专注
+        if (!Repos.lockState.isLockedNow() && !Pomodoro.isActive()) {
             shutdown()
             return START_NOT_STICKY
         }
@@ -62,7 +63,11 @@ class LockForegroundService : Service() {
             var wasInGrace = false
             var escapeAttempts = 0
             while (isActive) {
-                if (!Repos.lockState.isLockedNow()) {
+                // 番茄钟：到点推进相位（专注 ↔ 休息）。放在最前面 ——
+                // 休息时段锁是开的，靠这一句才能继续走到下一组专注。
+                runCatching { Pomodoro.tick(this@LockForegroundService) }
+
+                if (!Repos.lockState.isLockedNow() && !Pomodoro.isActive()) {
                     Repos.lockState.refresh()
                     shutdown()
                     return@launch

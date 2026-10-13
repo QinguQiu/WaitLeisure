@@ -68,6 +68,19 @@ class AppPrefs(context: Context) {
         get() = sp.getString(KEY_GROUPS, "[]") ?: "[]"
         set(value) = sp.edit().putString(KEY_GROUPS, value).apply()
 
+    /** 番茄钟配置：共几组,每组分钟,小休息,大休息,几组后大休息。 */
+    var pomodoroConfig: String
+        get() = sp.getString(KEY_POMODORO_CONFIG, DEFAULT_POMODORO) ?: DEFAULT_POMODORO
+        set(value) = sp.edit().putString(KEY_POMODORO_CONFIG, value).apply()
+
+    /**
+     * 番茄钟运行状态。空串 = 未运行；否则为 "组序号,相位,相位结束时刻"，
+     * 例如 "2,focus,1791900000000"。相位取 focus / break。
+     */
+    var pomodoroState: String
+        get() = sp.getString(KEY_POMODORO_STATE, "") ?: ""
+        set(value) = sp.edit().putString(KEY_POMODORO_STATE, value).apply()
+
     private companion object {
         const val NAME = "selflock_prefs"
         const val KEY_WHITELIST = "whitelist"
@@ -80,7 +93,10 @@ class AppPrefs(context: Context) {
         const val KEY_WALLPAPER_COLOR = "wallpaper_color"
         const val KEY_WALLPAPER_IMAGE = "wallpaper_image"
         const val KEY_GROUPS = "whitelist_groups"
+        const val KEY_POMODORO_CONFIG = "pomodoro_config"
+        const val KEY_POMODORO_STATE = "pomodoro_state"
         const val DEFAULT_QUICK_DURATIONS = "5,15,30,60,120,480"
         const val DEFAULT_WALLPAPER_COLOR = 0xFF000000.toInt()
+        const val DEFAULT_POMODORO = "4,25,5,15,2"
     }
 }
