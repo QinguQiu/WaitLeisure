@@ -88,8 +88,11 @@ class LockAccessibilityService : AccessibilityService() {
                 // 宁可让 ROM 的确认框被拦掉：那时用户会明确反馈「应用打不开」，
                 // 而放行桌面的症状是「偶尔能回桌面」，很难定位。
                 DiagLog.add("窗口", "$pkg → 免打扰窗口内，但桌面未识别，仍按拦截处理")
-            } else if (pkg !in homePackages) {
-                // ROM 的「启动应用」确认框或目标应用本身在前台，遮罩要让开
+            } else if (pkg !in homePackages && pkg != packageName) {
+                // ROM 的「启动应用」确认框或目标应用本身在前台，遮罩要让开。
+                // 但**自己**不能算：悬浮窗自己的窗口也会产生 com.selflock 事件，
+                // 若据此撤遮罩，会形成「盖上→撤下→盖上」的闪烁 ——
+                // 实测「确认框弹出时按 Home」就是这个循环，闪几次等窗口期过了才停。
                 LockOverlay.hide()
                 DiagLog.add("窗口", "$pkg → 免打扰窗口内，放行")
                 return

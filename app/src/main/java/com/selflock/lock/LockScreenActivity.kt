@@ -27,10 +27,8 @@ import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.items
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
-import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
@@ -52,8 +50,6 @@ import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.input.KeyboardType
-import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -379,7 +375,7 @@ private fun PinDialog(onDismiss: () -> Unit, onSuccess: () -> Unit) {
 
     // 悬浮窗里不能弹 Dialog：没有 Activity 的 window token，Dialog.show() 会抛
     // BadTokenException（Unable to add window -- token null is not valid）。
-    // 所以改成内嵌遮罩 + 居中卡片，渲染在悬浮窗自己的窗口里。
+    // 同理，悬浮窗窗口也收不到系统软键盘（IME），所以 PIN 用自绘数字键盘输入。
     Box(
         modifier = Modifier
             .fillMaxSize()
@@ -389,31 +385,41 @@ private fun PinDialog(onDismiss: () -> Unit, onSuccess: () -> Unit) {
         Surface(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(horizontal = 32.dp),
+                .padding(horizontal = 24.dp),
             shape = RoundedCornerShape(16.dp),
             color = Color(0xFF1C1C1E)
         ) {
-            Column(Modifier.padding(24.dp)) {
+            Column(
+                Modifier.padding(24.dp),
+                horizontalAlignment = Alignment.CenterHorizontally
+            ) {
                 Text(
                     text = stringResource(R.string.lock_unlock),
                     color = Color.White,
                     fontSize = 18.sp,
                     fontWeight = FontWeight.SemiBold
                 )
-                Spacer(Modifier.height(16.dp))
+                Spacer(Modifier.height(14.dp))
 
                 if (hasPin) {
-                    OutlinedTextField(
-                        value = pin,
-                        onValueChange = {
-                            pin = it.filter(Char::isDigit).take(12)
-                            wrong = false
-                        },
-                        singleLine = true,
-                        isError = wrong,
-                        label = { Text(stringResource(R.string.lock_pin_hint)) },
-                        visualTransformation = PasswordVisualTransformation(),
-                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.NumberPassword)
+                    Text(
+                        text = if (pin.isEmpty()) "输入 PIN" else "●".repeat(pin.length),
+                        color = Color.White,
+                        fontSize = 20.sp,
+                        letterSpacing = 6.sp
+                    )
+                    if (wrong) {
+                        Spacer(Modifier.height(6.dp))
+                        Text(
+                            text = stringResource(R.string.lock_pin_wrong),
+                            color = MaterialTheme.colorScheme.error,
+                            fontSize = 12.sp
+                        )
+                    }
+                    Spacer(Modifier.height(12.dp))
+                    NumberKeypad(
+                        onDigit = { if (pin.length < 12) { pin += it; wrong = false } },
+                        onBackspace = { pin = pin.dropLast(1); wrong = false }
                     )
                 } else {
                     // 没设 PIN 就直接放行，绝不把自己锁在门外
@@ -424,16 +430,7 @@ private fun PinDialog(onDismiss: () -> Unit, onSuccess: () -> Unit) {
                     )
                 }
 
-                if (wrong) {
-                    Spacer(Modifier.height(8.dp))
-                    Text(
-                        text = stringResource(R.string.lock_pin_wrong),
-                        color = MaterialTheme.colorScheme.error,
-                        fontSize = 12.sp
-                    )
-                }
-
-                Spacer(Modifier.height(20.dp))
+                Spacer(Modifier.height(16.dp))
                 Row(
                     horizontalArrangement = Arrangement.End,
                     modifier = Modifier.fillMaxWidth()
@@ -445,6 +442,51 @@ private fun PinDialog(onDismiss: () -> Unit, onSuccess: () -> Unit) {
                     }) { Text(stringResource(R.string.action_confirm)) }
                 }
             }
+        }
+    }
+}
+
+/** 自绘数字键盘：悬浮窗收不到系统 IME，PIN 只能靠它输入。 */
+@Composable
+private fun NumberKeypad(
+    onDigit: (Char) -> Unit,
+    onBackspace: () -> Unit,
+    modifier: Modifier = Modifier
+) {
+    Column(
+        modifier = modifier.fillMaxWidth(),
+        verticalArrangement = Arrangement.spacedBy(8.dp)
+    ) {
+        listOf(
+            listOf('1', '2', '3'),
+            listOf('4', '5', '6'),
+            listOf('7', '8', '9')
+        ).forEach { row ->
+            Row(
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                row.forEach { d ->
+                    OutlinedButton(
+                        onClick = { onDigit(d) },
+                        modifier = Modifier.weight(1f)
+                    ) { Text(d.toString(), fontSize = 20.sp) }
+                }
+            }
+        }
+        Row(
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+            modifier = Modifier.fillMaxWidth()
+        ) {
+            OutlinedButton(
+                onClick = onBackspace,
+                modifier = Modifier.weight(1f)
+            ) { Text("⌫", fontSize = 20.sp) }
+            OutlinedButton(
+                onClick = { onDigit('0') },
+                modifier = Modifier.weight(1f)
+            ) { Text("0", fontSize = 20.sp) }
+            Spacer(Modifier.weight(1f))
         }
     }
 }
