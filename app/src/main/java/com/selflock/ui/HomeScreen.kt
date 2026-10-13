@@ -115,6 +115,30 @@ fun HomeScreen() {
             onOpenLockScreen = { LockScreenActivity.show(context) }
         )
 
+        // 无障碍服务没在跑时，锁机完全不生效，而且界面上不会有任何报错。
+        // 这张卡片必须放在最上面 —— 放到页面底部等于没有：用户不滚动就看不到，
+        // 实测用 uiautomator 抓屏幕内容时，屏幕外的节点根本抓不到。
+        if (!Permissions.isAccessibilityEnabled(context)) {
+            SectionCard(
+                title = "⚠️ 无障碍服务未运行 —— 锁机当前不生效",
+                subtitle = if (Permissions.isAccessibilityListedButDead(context)) {
+                    "系统设置里显示它「已开启」，但系统并没有真正绑定它。" +
+                        "这在安装新版本 APK 后很常见。" +
+                        "请到 设置 → 更多设置 → 无障碍 → SelfLock 锁机服务，" +
+                        "先关掉、再重新打开一次。"
+                } else {
+                    "请到 设置 → 更多设置 → 无障碍 → SelfLock 锁机服务 打开它。"
+                }
+            ) {
+                Text(
+                    text = "为什么单独提示：服务没在跑的时候，锁机不会拦截任何应用" +
+                        "（包括桌面），但界面上不会弹任何错误 —— 看起来就像功能坏了。",
+                    fontSize = 12.sp,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            }
+        }
+
         SectionCard(
             title = "权限体检",
             subtitle = "已就绪 ${perms.okCount} / 5 · 缺任何一项都会让锁机漏风"

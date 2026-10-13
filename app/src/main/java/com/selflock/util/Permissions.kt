@@ -1,5 +1,6 @@
 package com.selflock.util
 
+import android.accessibilityservice.AccessibilityServiceInfo
 import android.app.Activity
 import android.app.AlarmManager
 import android.app.admin.DevicePolicyManager
@@ -10,6 +11,7 @@ import android.net.Uri
 import android.os.Build
 import android.os.PowerManager
 import android.provider.Settings
+import android.view.accessibility.AccessibilityManager
 import androidx.core.app.NotificationManagerCompat
 import com.selflock.lock.DeviceAdminReceiver
 import com.selflock.lock.LockAccessibilityService
@@ -26,7 +28,37 @@ import com.selflock.lock.LockAccessibilityService
  */
 object Permissions {
 
-    fun isAccessibilityEnabled(context: Context): Boolean {
+    /**
+     * 无障碍服务是否**真的在运行**。
+     *
+     * 注意：**不能**用 Settings.Secure.ENABLED_ACCESSIBILITY_SERVICES 来判断。
+     * 那行字符串只说明「系统设置里列着这个服务」，跟「服务已被绑定、正在收事件」
+     * 完全是两回事。实测（HyperOS + adb）：
+     *
+     *   往那个设置里写入服务名 → 设置里就列着它了，但系统根本没绑定；
+     *   锁机完全不生效，而旧版这里却返回 ✅ —— 一个假阳性让整轮排查方向全错。
+     *
+     * AccessibilityManager.getEnabledAccessibilityServiceList 返回的是系统真正
+     * 启用并绑定完成的服务列表，这才是可信信号。
+     */
+    fun isAccessibilityEnabled(context: Context): Boolean = runCatching {
+        val am = context.getSystemService(AccessibilityManager::class.java) ?: return false
+        if (!am.isEnabled) return false
+        val expected = ComponentName(context, LockAccessibilityService::class.java)
+        am.getEnabledAccessibilityServiceList(AccessibilityServiceInfo.FEEDBACK_ALL_MASK)
+            .any { info ->
+                val si = info.resolveInfo?.serviceInfo
+                si != null &&
+                    si.packageName == expected.packageName &&
+                    si.name == expected.className
+            }
+    }.getOrDefault(false)
+
+    /** 服务名写在系统设置里，但系统并没有真正绑定它 —— 也就是「看着开了，其实没开」。 */
+    fun isAccessibilityListedButDead(context: Context): Boolean =
+        isAccessibilityListed(context) && !isAccessibilityEnabled(context)
+
+    private fun isAccessibilityListed(context: Context): Boolean {
         val component = ComponentName(context, LockAccessibilityService::class.java)
         val full = component.flattenToString()
         val short = component.flattenToShortString()

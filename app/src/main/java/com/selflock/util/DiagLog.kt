@@ -1,5 +1,6 @@
 package com.selflock.util
 
+import android.util.Log
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
@@ -13,6 +14,9 @@ import java.util.Locale
  */
 object DiagLog {
 
+    /** logcat 用的 tag：adb logcat -s SelfLock:D */
+    const val LOG_TAG = "SelfLock"
+
     private const val CAPACITY = 40
 
     private val buffer = ArrayDeque<String>()
@@ -20,8 +24,13 @@ object DiagLog {
 
     @Synchronized
     fun add(tag: String, detail: String) {
-        buffer.addLast(formatter.format(Date()) + " [" + tag + "] " + detail)
+        val line = formatter.format(Date()) + " [" + tag + "] " + detail
+        buffer.addLast(line)
         while (buffer.size > CAPACITY) buffer.removeFirst()
+        // 同时打到 logcat。
+        // 界面上的环形缓冲只有 40 条，测试时很容易被冲掉；而用 adb 远程调试时，
+        // logcat 是唯一能看到服务内部每一步的窗口 —— 之前几轮排查全靠猜，就是因为看不到这个。
+        Log.d(LOG_TAG, line)
     }
 
     /** 返回按时间正序的快照；界面自己决定怎么展示。 */
