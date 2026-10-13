@@ -17,6 +17,7 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -44,6 +45,13 @@ fun WhitelistScreen() {
 
     val apps by produceState(initialValue = emptyList<AppInfo>()) {
         value = Repos.installedApps.loadLaunchableApps()
+    }
+
+    // 列表一出来就后台把图标/名字全部预热，避免第一次滚动时边滚边加载
+    LaunchedEffect(apps) {
+        if (apps.isNotEmpty()) {
+            prefetchAppIcons(apps.map { it.packageName })
+        }
     }
 
     val filtered = remember(apps, query) {

@@ -62,6 +62,8 @@ import androidx.compose.ui.unit.sp
 import androidx.core.graphics.drawable.toBitmap
 import com.selflock.R
 import com.selflock.data.Repos
+import com.selflock.ui.AppIcon
+import com.selflock.ui.rememberAppLabel
 import com.selflock.util.DiagLog
 import com.selflock.util.Pin
 import kotlinx.coroutines.delay
@@ -500,35 +502,19 @@ private fun WhitelistSection(
 
 @Composable
 private fun AppEntry(packageName: String, onClick: () -> Unit) {
-    val label = remember(packageName) { Repos.installedApps.labelOf(packageName) }
-    val bitmap = remember(packageName) {
-        runCatching {
-            Repos.installedApps.iconOf(packageName)?.toBitmap(144, 144)?.asImageBitmap()
-        }.getOrNull()
-    }
+    // 走统一的「缓存 + IO 线程加载」，别再自己实现一遍 ——
+    // 之前这里和 AppIcon 各写了一份无缓存版本，是滚动卡顿的主要来源。
+    val label = rememberAppLabel(packageName)
 
     Column(
         horizontalAlignment = Alignment.CenterHorizontally,
         modifier = Modifier.clickable(onClick = onClick)
     ) {
-        Box(
-            modifier = Modifier
-                .size(52.dp)
-                .clip(RoundedCornerShape(14.dp))
-                .background(Color(0xFF1B1B1B)),
-            contentAlignment = Alignment.Center
-        ) {
-            if (bitmap != null) {
-                Image(
-                    bitmap = bitmap,
-                    contentDescription = label,
-                    contentScale = ContentScale.Fit,
-                    modifier = Modifier.size(46.dp)
-                )
-            } else {
-                Text(label.take(1), color = Color.White, fontSize = 20.sp)
-            }
-        }
+        AppIcon(
+            packageName = packageName,
+            size = 52.dp,
+            backgroundColor = Color(0xFF1B1B1B)
+        )
         Spacer(Modifier.height(6.dp))
         Text(
             text = label,
