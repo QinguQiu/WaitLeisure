@@ -12,6 +12,13 @@
       注意：该权限在 Google Play 属于政策敏感权限（需说明用途）。本工程是自用/侧载，不涉及上架。
     -->
     <uses-permission android:name="android.permission.REQUEST_IGNORE_BATTERY_OPTIMIZATIONS" />
+    <!--
+      全屏遮罩用。这是整套锁机里唯一不依赖 Activity 启动的一层：
+      按 Home 把锁机页切到后台后，MIUI 会拒绝本应用再拉起任何 Activity
+      （logcat: MIUILOG- Permission Denied Activity），而 WindowManager.addView
+      不经过 Activity 启动，那道墙管不到。
+    -->
+    <uses-permission android:name="android.permission.SYSTEM_ALERT_WINDOW" />
 
     <!-- 锁机期间常驻通知 -->
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
@@ -72,6 +79,7 @@
             android:taskAffinity=""
             android:theme="@style/Theme.SelfLock.Lock"
             tools:targetApi="27" />
+
 
         <!-- 软锁核心：监听前台应用切换，非白名单即踢回锁机页 -->
         <service

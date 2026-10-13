@@ -72,6 +72,25 @@ object Permissions {
     fun areNotificationsEnabled(context: Context): Boolean =
         NotificationManagerCompat.from(context).areNotificationsEnabled()
 
+    /**
+     * 「显示悬浮窗」是否已授权。
+     *
+     * 这一项现在也算关键项：全屏遮罩是唯一能挡住「连点 Home 逃到桌面」的手段，
+     * 没授权时锁机在极端连点下会漏。
+     */
+    fun canDrawOverlays(context: Context): Boolean = runCatching {
+        Settings.canDrawOverlays(context)
+    }.getOrDefault(false)
+
+    fun openOverlaySettings(context: Context) {
+        context.startSafely(
+            Intent(
+                Settings.ACTION_MANAGE_OVERLAY_PERMISSION,
+                Uri.parse("package:" + context.packageName)
+            )
+        )
+    }
+
     fun canScheduleExactAlarms(context: Context): Boolean {
         if (Build.VERSION.SDK_INT < Build.VERSION_CODES.S) return true
         val am = context.getSystemService(AlarmManager::class.java) ?: return false

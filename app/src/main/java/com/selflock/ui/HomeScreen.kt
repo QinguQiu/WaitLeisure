@@ -31,6 +31,8 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
+import android.content.ClipData
+import android.content.ClipboardManager
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.input.PasswordVisualTransformation
@@ -59,12 +61,14 @@ data class PermissionSnapshot(
     val exactAlarm: Boolean,
     val notification: Boolean,
     val battery: Boolean,
-    val deviceAdmin: Boolean
+    val deviceAdmin: Boolean,
+    val overlay: Boolean
 ) {
     val okCount: Int
-        get() = listOf(accessibility, exactAlarm, notification, battery, deviceAdmin).count { it }
+        get() = listOf(accessibility, exactAlarm, notification, battery, deviceAdmin, overlay)
+            .count { it }
 
-    val allOk: Boolean get() = okCount == 5
+    val allOk: Boolean get() = okCount == 6
 
     companion object {
         fun of(context: Context) = PermissionSnapshot(
@@ -72,7 +76,8 @@ data class PermissionSnapshot(
             exactAlarm = Permissions.canScheduleExactAlarms(context),
             notification = Permissions.areNotificationsEnabled(context),
             battery = Permissions.isIgnoringBatteryOptimizations(context),
-            deviceAdmin = Permissions.isDeviceAdminActive(context)
+            deviceAdmin = Permissions.isDeviceAdminActive(context),
+            overlay = Permissions.canDrawOverlays(context)
         )
     }
 }
@@ -89,6 +94,7 @@ fun HomeScreen() {
     // 本工程不想为此多引一个依赖。改成 LaunchedEffect(Unit)，
     // 配合 SelfLockNavHost 的 when 切换 —— 每次回到首页都会重新进入组合，效果等价。
     var refreshKey by remember { mutableIntStateOf(0) }
+    var copied by remember { mutableStateOf(false) }
     LaunchedEffect(Unit) {
         Repos.lockState.refresh()
     }
@@ -141,7 +147,7 @@ fun HomeScreen() {
 
         SectionCard(
             title = "权限体检",
-            subtitle = "已就绪 ${perms.okCount} / 5 · 缺任何一项都会让锁机漏风"
+            subtitle = "已就绪 ${perms.okCount} / 6 · 缺任何一项都会让锁机漏风"
         ) {
             CheckRow(
                 ok = perms.accessibility,
@@ -177,6 +183,14 @@ fun HomeScreen() {
                 description = "锁机期间阻止「一键卸载」",
                 actionLabel = "去激活",
                 onAction = { Permissions.requestDeviceAdmin(context) }
+            )
+            CheckRow(
+                ok = perms.overlay,
+                title = "显示悬浮窗",
+                description = "全屏遮罩。没有它，连点几次 Home 就能逃到桌面 —— " +
+                    "因为 MIUI 会拒绝被 Home 切到后台的锁机页再回到前台，而遮罩不经过 Activity 启动",
+                actionLabel = "去授权",
+                onAction = { Permissions.openOverlaySettings(context) }
             )
             Spacer(Modifier.height(4.dp))
             TextButton(onClick = { refreshKey++ }) {
@@ -221,6 +235,15 @@ fun HomeScreen() {
             Spacer(Modifier.height(4.dp))
             Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
                 TextButton(onClick = { refreshKey++ }) { Text("刷新") }
+                TextButton(
+                    enabled = lines.isNotEmpty(),
+                    onClick = {
+                        val dump = DiagLog.snapshot().joinToString("\n")
+                        val cm = context.getSystemService(ClipboardManager::class.java)
+                        cm?.setPrimaryClip(ClipData.newPlainText("SelfLock 诊断日志", dump))
+                        copied = true
+                    }
+                ) { Text(if (copied) "已复制 ✓" else "复制全部") }
                 TextButton(onClick = { DiagLog.clear(); refreshKey++ }) { Text("清空") }
             }
         }

@@ -90,10 +90,16 @@ class LockScreenActivity : ComponentActivity() {
 
     override fun onResume() {
         super.onResume()
+        isResumed = true
         Repos.ensure(this)
         Repos.lockState.refresh()
         // 定时到点了就会被弹走，别继续挡着用户
         if (!Repos.lockState.isLockedNow()) finish()
+    }
+
+    override fun onPause() {
+        isResumed = false
+        super.onPause()
     }
 
     /** 允许盖在系统锁屏之上，并在触发时点亮屏幕。 */
@@ -117,6 +123,21 @@ class LockScreenActivity : ComponentActivity() {
     }
 
     companion object {
+        /**
+         * 锁机页此刻是否真的处于 resumed 状态。
+         *
+         * 为什么不能用「无障碍事件里最后一个包名是不是自己」来判断：
+         * 连续快速按 Home 时系统会丢弃一部分窗口事件。真机实测（adb 连按 5 次
+         * 无间隔）：只收到 2 次桌面的 TYPE_WINDOW_STATE_CHANGED，紧接着一条
+         * 「com.selflock → 自身」——服务据此认为已经拦住了、收工，可剩下的按键
+         * 仍在把桌面往上推，而且此后不再产生任何事件，最终停在桌面上。
+         *
+         * Activity 的 onResume/onPause 反映的是真实状态，不会被丢事件骗到。
+         */
+        @Volatile
+        var isResumed: Boolean = false
+            private set
+
         /**
          * 从无障碍服务/广播接收器里把锁机页拉到前台。
          *

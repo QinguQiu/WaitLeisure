@@ -68,7 +68,11 @@ class LockAccessibilityService : AccessibilityService() {
 
         // 快速路径：绝大多数时间都没在锁机，这里直接返回，零额外开销。
         // 注意这里不写诊断日志 —— 不锁机时事件量很大，会把有用的记录冲掉。
-        if (!Repos.lockState.isLockedNow()) return
+        if (!Repos.lockState.isLockedNow()) {
+            // 锁机结束后遮罩必须撤掉，否则会一直盖着屏幕
+            LockOverlay.hide()
+            return
+        }
 
         // 用户刚在锁机页点了某个白名单应用 —— 这段时间不拦截，
         // 目的是放行 ROM 的「启动应用」确认框。
@@ -85,6 +89,8 @@ class LockAccessibilityService : AccessibilityService() {
                 // 而放行桌面的症状是「偶尔能回桌面」，很难定位。
                 DiagLog.add("窗口", "$pkg → 免打扰窗口内，但桌面未识别，仍按拦截处理")
             } else if (pkg !in homePackages) {
+                // ROM 的「启动应用」确认框或目标应用本身在前台，遮罩要让开
+                LockOverlay.hide()
                 DiagLog.add("窗口", "$pkg → 免打扰窗口内，放行")
                 return
             } else {
@@ -103,11 +109,19 @@ class LockAccessibilityService : AccessibilityService() {
         }
 
         if (reason != "拦截") {
-            // 已经回到锁机页了，补拉没必要继续
-            if (pkg == packageName) cancelReassert()
+            // 白名单/自身/核心界面在前台，遮罩必须撤掉，否则会把用户正常用的应用挡住。
+            // 注意：这里**不能**因为「回到锁机页」就取消补拉 ——
+            // 事件可能被系统丢掉（见 reassertRunnable 里的实测数据），
+            // 真正的判据是 LockScreenActivity.isResumed，在补拉逻辑里检查。
+            LockOverlay.hide()
             DiagLog.add("窗口", "$pkg → $reason")
             return
         }
+
+        // 先盖遮罩，再试着拉锁机页。
+        // 遮罩不经过 Activity 启动，MIUI 的防劫持墙拦不住它 ——
+        // 所以即使锁机页拉不起来（连点 Home 时必然发生），桌面也已经被挡住了。
+        LockOverlay.show(this, pkg)
 
         // 关键：把 startActivity 的成功/失败也记下来。
         // 以前 show() 是 runCatching 包裹后静默吞异常的，失败时毫无线索。
@@ -136,17 +150,37 @@ class LockAccessibilityService : AccessibilityService() {
 
     private val reassertRunnable = object : Runnable {
         override fun run() {
-            if (!Repos.lockState.isLockedNow()) return
-            val pkg = lastPackage ?: return
-            if (pkg == packageName) return                       // 已经在锁机页，收工
-            if (pkg in lastCoreAllowed) return
-            if (Repos.whitelist.contains(pkg)) return            // 白名单应用本来就不该拦
+            if (!Repos.lockState.isLockedNow()) {
+                // 锁机结束后遮罩必须撤掉，否则会一直盖着屏幕
+                LockOverlay.hide()
+                return
+            }
+
+            // 判据是 Activity 的真实状态，而不是「最后一个事件是不是自己」。
+            // 后者会被丢弃的事件骗到：连按 Home 时服务先看到几条第桌面事件，
+            // 再看到一条「回到自己」就以为拦住了，可剩下的按键还在把桌面往上推。
+            if (LockScreenActivity.isResumed) {
+                cancelReassert()
+                return
+            }
+
+            // 前台明确是别的包、且属于白名单/核心放行时，不该补拉。
+            // lastPackage 可能是旧的（因此等于自己），那种情况要往下走继续补拉。
+            val pkg = lastPackage
+            if (pkg != null && pkg != packageName) {
+                if (pkg in lastCoreAllowed) return
+                if (Repos.whitelist.contains(pkg)) return
+            }
+
             if (reassertAttempts >= MAX_REASSERT_ATTEMPTS) {
-                DiagLog.add("补拉", "连续 " + reassertAttempts + " 次仍未回锁机页，放弃（前台 $pkg）")
+                DiagLog.add("补拉", "连续 " + reassertAttempts + " 次仍未回锁机页，放弃（lastPkg=" + pkg + "）")
                 return
             }
             reassertAttempts++
-            DiagLog.add("补拉", "第 " + reassertAttempts + " 次，前台仍是 $pkg")
+            DiagLog.add("补拉", "第 " + reassertAttempts + " 次：锁机页不在前台（lastPkg=" + pkg + "）")
+            // 这里不能直接再拉锁机页：MIUI 会拒绝刚被 Home 切到后台的那个 Activity
+            // （实测 startActivity 恒返回 code=3，且日志里有 Permission Denied Activity）。
+            // 改用「换手」页把应用带回前台，它再负责拉锁机页。
             LockScreenActivity.show(this@LockAccessibilityService)
             mainHandler.postDelayed(this, REASSERT_DELAY_MILLIS)
         }
@@ -269,6 +303,12 @@ class LockAccessibilityService : AccessibilityService() {
 
         /** 供界面显示。 */
         fun isConnected(): Boolean = connected
+
+        /** 供逃逸看门狗判断用：最近一次无障碍事件里的前台包名。 */
+        fun lastSeenPackage(): String? = lastPackage
+
+        /** pkg 是否是默认桌面。 */
+        fun isHomePackage(pkg: String?): Boolean = pkg != null && pkg in homePackages
 
         /** 供界面显示。 */
         fun receivedEventCount(): Long = eventCount
