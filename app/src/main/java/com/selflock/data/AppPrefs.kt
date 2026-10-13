@@ -43,6 +43,31 @@ class AppPrefs(context: Context) {
         get() = sp.getLong(KEY_ACTIVE_SCHEDULE, -1L)
         set(value) = sp.edit().putLong(KEY_ACTIVE_SCHEDULE, value).apply()
 
+    /** 是否允许锁机时通过 PIN 解锁。false = 严格锁，锁机页不显示解锁按钮，只能等时间到。 */
+    var allowPinUnlock: Boolean
+        get() = sp.getBoolean(KEY_ALLOW_PIN_UNLOCK, true)
+        set(value) = sp.edit().putBoolean(KEY_ALLOW_PIN_UNLOCK, value).apply()
+
+    /** 立即锁机的常用时长（分钟，逗号分隔）。 */
+    var quickDurations: String
+        get() = sp.getString(KEY_QUICK_DURATIONS, DEFAULT_QUICK_DURATIONS) ?: DEFAULT_QUICK_DURATIONS
+        set(value) = sp.edit().putString(KEY_QUICK_DURATIONS, value).apply()
+
+    /** 锁机页壁纸颜色（ARGB int）。 */
+    var wallpaperColor: Int
+        get() = sp.getInt(KEY_WALLPAPER_COLOR, DEFAULT_WALLPAPER_COLOR)
+        set(value) = sp.edit().putInt(KEY_WALLPAPER_COLOR, value).apply()
+
+    /** 锁机页壁纸图片路径；null 表示用纯色。 */
+    var wallpaperImagePath: String?
+        get() = sp.getString(KEY_WALLPAPER_IMAGE, null)
+        set(value) = sp.edit().putString(KEY_WALLPAPER_IMAGE, value).apply()
+
+    /** 白名单分组，JSON 数组字符串（用系统自带的 org.json）。 */
+    var whitelistGroupsJson: String
+        get() = sp.getString(KEY_GROUPS, "[]") ?: "[]"
+        set(value) = sp.edit().putString(KEY_GROUPS, value).apply()
+
     private companion object {
         const val NAME = "selflock_prefs"
         const val KEY_WHITELIST = "whitelist"
@@ -50,5 +75,12 @@ class AppPrefs(context: Context) {
         const val KEY_PIN_HASH = "pin_hash"
         const val KEY_LOCKED_UNTIL = "locked_until"
         const val KEY_ACTIVE_SCHEDULE = "active_schedule"
+        const val KEY_ALLOW_PIN_UNLOCK = "allow_pin_unlock"
+        const val KEY_QUICK_DURATIONS = "quick_durations"
+        const val KEY_WALLPAPER_COLOR = "wallpaper_color"
+        const val KEY_WALLPAPER_IMAGE = "wallpaper_image"
+        const val KEY_GROUPS = "whitelist_groups"
+        const val DEFAULT_QUICK_DURATIONS = "5,15,30,60,120,480"
+        const val DEFAULT_WALLPAPER_COLOR = 0xFF000000.toInt()
     }
 }

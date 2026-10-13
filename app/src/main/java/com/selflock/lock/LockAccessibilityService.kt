@@ -107,7 +107,7 @@ class LockAccessibilityService : AccessibilityService() {
         val reason = when {
             pkg == packageName -> "自身"
             pkg in core -> "核心放行"
-            Repos.whitelist.contains(pkg) -> "白名单"
+            Repos.isWhitelisted(pkg) -> "白名单"
             else -> "拦截"
         }
 
@@ -127,7 +127,7 @@ class LockAccessibilityService : AccessibilityService() {
             //
             // 另：这里也不能因为「回到锁机页」就取消补拉 —— 事件会被系统丢掉，
             // 真正的判据同样是 isResumed，在补拉逻辑里检查。
-            val whitelisted = Repos.whitelist.contains(pkg)
+            val whitelisted = Repos.isWhitelisted(pkg)
 
             // 「回到锁机页」要同时满足三条，缺一条就会出问题：
             //
@@ -201,7 +201,7 @@ class LockAccessibilityService : AccessibilityService() {
             val pkg = lastPackage
             if (pkg != null && pkg != packageName) {
                 if (pkg in lastCoreAllowed) return
-                if (Repos.whitelist.contains(pkg)) return
+                if (Repos.isWhitelisted(pkg)) return
             }
 
             if (reassertAttempts >= MAX_REASSERT_ATTEMPTS) {
@@ -396,7 +396,7 @@ class LockAccessibilityService : AccessibilityService() {
             if (!Repos.lockState.isLockedNow()) return false
             if (pkg == selfPackage) return false
             if (pkg in lastCoreAllowed) return false
-            return !Repos.whitelist.contains(pkg)
+            return !Repos.isWhitelisted(pkg)
         }
     }
 }

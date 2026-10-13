@@ -90,7 +90,7 @@ class LockForegroundService : Service() {
                         // 无障碍「假绑定」时 lastPackage 一直是 null，用使用情况访问兜底
                         pkg = ForegroundDetector.currentForegroundPackage(this@LockForegroundService)
                     }
-                    val definitelyWhitelisted = pkg != null && Repos.whitelist.contains(pkg)
+                    val definitelyWhitelisted = pkg != null && Repos.isWhitelisted(pkg)
 
                     if (definitelyWhitelisted) {
                         // 白名单应用在前台：悬浮窗让开，用户才能用它。

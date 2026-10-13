@@ -1,7 +1,13 @@
 package com.selflock.ui
 
 import android.content.Context
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -9,15 +15,22 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
+import androidx.compose.material3.Checkbox
+import androidx.compose.material3.FilterChip
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
@@ -26,10 +39,14 @@ import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.produceState
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.platform.LocalContext
 import android.content.ClipData
 import android.content.ClipboardManager
@@ -41,6 +58,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.selflock.alarm.AlarmScheduler
 import com.selflock.data.Repos
+import com.selflock.data.WhitelistGroup
 import com.selflock.util.DiagLog
 import com.selflock.lock.LockAccessibilityService
 import com.selflock.lock.LockController
@@ -51,6 +69,9 @@ import com.selflock.model.toDurationText
 import com.selflock.model.toHhMm
 import com.selflock.util.Permissions
 import com.selflock.util.Pin
+import com.selflock.model.AppInfo
+import java.io.File
+import java.io.FileOutputStream
 import java.time.Instant
 import java.time.LocalDateTime
 import java.time.ZoneId
@@ -107,6 +128,27 @@ fun HomeScreen() {
     var showLockNowDialog by remember { mutableStateOf(false) }
     // 记住上次选的时长，下次打开弹窗时沿用，不用每次重选
     var lockNowMinutes by remember { mutableIntStateOf(DEFAULT_LOCK_NOW_MINUTES) }
+    var allowPinUnlock by remember { mutableStateOf(Repos.prefs.allowPinUnlock) }
+    val groups by Repos.groups.groups.collectAsState()
+    var showQuickEdit by remember { mutableStateOf(false) }
+    var showGroupEdit by remember { mutableStateOf(false) }
+    var editingGroup by remember { mutableStateOf<WhitelistGroup?>(null) }
+
+    // 壁纸图片选择：选完复制到应用私有目录，锁机页直接读文件
+    val wallpaperPicker = rememberLauncherForActivityResult(
+        ActivityResultContracts.GetContent()
+    ) { uri ->
+        if (uri != null) {
+            runCatching {
+                val file = File(context.filesDir, "wallpaper.jpg")
+                context.contentResolver.openInputStream(uri)?.use { input ->
+                    FileOutputStream(file).use { output -> input.copyTo(output) }
+                }
+                Repos.prefs.wallpaperImagePath = file.absolutePath
+                Repos.prefs.wallpaperColor = 0xFF000000.toInt()
+            }
+        }
+    }
 
     Column(
         modifier = Modifier
@@ -236,8 +278,132 @@ fun HomeScreen() {
                 "已设置。锁定期间输入 PIN 可提前解除。"
             }
         ) {
-            OutlinedButton(onClick = { showPinDialog = true }) {
-                Text(if (Repos.prefs.pinHash.isNullOrEmpty()) "设置 PIN" else "修改 PIN")
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                OutlinedButton(onClick = { showPinDialog = true }) {
+                    Text(if (Repos.prefs.pinHash.isNullOrEmpty()) "设置 PIN" else "修改 PIN")
+                }
+                if (!Repos.prefs.pinHash.isNullOrEmpty()) {
+                    OutlinedButton(onClick = { Repos.prefs.pinHash = null }) {
+                        Text("清除 PIN")
+                    }
+                }
+            }
+        }
+
+        SectionCard(
+            title = "锁机选项",
+            subtitle = "密码解锁与常用时长"
+        ) {
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                Column(Modifier.weight(1f)) {
+                    Text("允许密码解锁", fontSize = 14.sp)
+                    Text(
+                        text = "关闭后锁机页不显示解锁按钮，只能等时间到",
+                        fontSize = 11.sp,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
+                Switch(
+                    checked = allowPinUnlock,
+                    onCheckedChange = {
+                        allowPinUnlock = it
+                        Repos.prefs.allowPinUnlock = it
+                    }
+                )
+            }
+            Spacer(Modifier.height(10.dp))
+            TextButton(onClick = { showQuickEdit = true }) {
+                Text("立即锁机常用时长：${Repos.prefs.quickDurations} 分钟")
+            }
+        }
+
+        SectionCard(
+            title = "锁机页壁纸",
+            subtitle = "纯色或自定义图片"
+        ) {
+            Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                WALLPAPER_COLORS.forEach { c ->
+                    Box(
+                        modifier = Modifier
+                            .size(36.dp)
+                            .clip(CircleShape)
+                            .background(c)
+                            .clickable {
+                                Repos.prefs.wallpaperColor = c.toArgb()
+                                Repos.prefs.wallpaperImagePath = null
+                            }
+                    )
+                }
+            }
+            Spacer(Modifier.height(10.dp))
+            Row {
+                TextButton(onClick = { wallpaperPicker.launch("image/*") }) { Text("选择图片…") }
+                if (Repos.prefs.wallpaperImagePath != null) {
+                    TextButton(onClick = { Repos.prefs.wallpaperImagePath = null }) {
+                        Text("恢复纯色")
+                    }
+                }
+            }
+        }
+
+        SectionCard(
+            title = "白名单分组",
+            subtitle = "不同时段可用不同应用（全局白名单始终生效）"
+        ) {
+            if (groups.isEmpty()) {
+                Text(
+                    text = "还没有分组。",
+                    fontSize = 12.sp,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            } else {
+                groups.forEach { g ->
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clickable { editingGroup = g; showGroupEdit = true }
+                            .padding(vertical = 6.dp)
+                    ) {
+                        Column(Modifier.weight(1f)) {
+                            Text(
+                                text = "${g.name} · ${g.startMinute.toHhMm()}-${g.endMinute.toHhMm()} · ${g.packages.size} 个应用",
+                                fontSize = 13.sp,
+                                color = if (g.enabled) Color.Unspecified else MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                            if (!g.enabled) {
+                                Text("已停用", fontSize = 11.sp, color = MaterialTheme.colorScheme.error)
+                            }
+                        }
+                        TextButton(onClick = { Repos.groups.remove(g.id) }) { Text("删除") }
+                    }
+                }
+            }
+            TextButton(onClick = { editingGroup = null; showGroupEdit = true }) {
+                Text("＋ 新建分组")
+            }
+        }
+
+        SectionCard(
+            title = "番茄锁机",
+            subtitle = "专注一段时间，期间锁机"
+        ) {
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                POMODORO_PRESETS.forEach { m ->
+                    FilterChip(
+                        selected = false,
+                        onClick = {
+                            LockController.lock(
+                                context,
+                                System.currentTimeMillis() + m * 60_000L
+                            )
+                        },
+                        label = { Text("$m 分") }
+                    )
+                }
             }
         }
 
@@ -320,6 +486,27 @@ fun HomeScreen() {
             }
         )
     }
+
+    if (showQuickEdit) {
+        QuickDurationsDialog(
+            onDismiss = { showQuickEdit = false },
+            onSave = { text ->
+                Repos.prefs.quickDurations = text
+                showQuickEdit = false
+            }
+        )
+    }
+
+    if (showGroupEdit) {
+        GroupEditDialog(
+            editing = editingGroup,
+            onDismiss = { showGroupEdit = false },
+            onSave = { group ->
+                Repos.groups.save(group)
+                showGroupEdit = false
+            }
+        )
+    }
 }
 
 // ---------------------------------------------------------------- 立即锁机
@@ -372,6 +559,21 @@ private fun LockNowDialog(
                 )
 
                 Spacer(Modifier.height(16.dp))
+
+                Row(
+                    horizontalArrangement = Arrangement.spacedBy(6.dp),
+                    modifier = Modifier.horizontalScroll(rememberScrollState())
+                ) {
+                    quickDurationsList().forEach { preset ->
+                        FilterChip(
+                            selected = preset == minutes,
+                            onClick = { minutes = preset },
+                            label = { Text(preset.toDurationText()) }
+                        )
+                    }
+                }
+
+                Spacer(Modifier.height(8.dp))
 
                 DurationPicker(
                     totalMinutes = minutes,
@@ -519,5 +721,178 @@ private fun nextTriggerText(schedules: List<Schedule>): String {
         time.startMinutes.toHhMm(),
         time.durationMinutes.toDurationText(),
         time.days.describeDays()
+    )
+}
+
+// ---------------------------------------------------------------- 锁机选项
+
+/** 解析「立即锁机常用时长」的逗号分隔列表。 */
+private fun quickDurationsList(): List<Int> =
+    Repos.prefs.quickDurations
+        .split(',')
+        .mapNotNull { it.trim().toIntOrNull() }
+        .filter { it > 0 }
+        .ifEmpty { listOf(5, 15, 30, 60) }
+
+/** 锁机页壁纸预设色。 */
+private val WALLPAPER_COLORS = listOf(
+    Color(0xFF000000),
+    Color(0xFF101014),
+    Color(0xFF1A1A2E),
+    Color(0xFF0F2027),
+    Color(0xFF1B2A1B),
+    Color(0xFF2B1B1B)
+)
+
+/** 番茄锁机预设时长（分钟）。 */
+private val POMODORO_PRESETS = listOf(15, 25, 45)
+
+private fun parseHhMm(s: String): Int? {
+    val parts = s.split(':')
+    if (parts.size != 2) return null
+    val h = parts[0].toIntOrNull() ?: return null
+    val m = parts[1].toIntOrNull() ?: return null
+    if (h !in 0..23 || m !in 0..59) return null
+    return h * 60 + m
+}
+
+@Composable
+private fun QuickDurationsDialog(onDismiss: () -> Unit, onSave: (String) -> Unit) {
+    var text by remember { mutableStateOf(Repos.prefs.quickDurations) }
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text("立即锁机常用时长") },
+        text = {
+            Column {
+                OutlinedTextField(
+                    value = text,
+                    onValueChange = {
+                        text = it.filter { c -> c.isDigit() || c == ',' || c == ' ' }
+                    },
+                    singleLine = true,
+                    label = { Text("分钟数，用逗号分隔，如 5,15,30,60") }
+                )
+                Spacer(Modifier.height(8.dp))
+                Text(
+                    text = "这些会显示在「立即锁机」弹窗里作为快捷选项。",
+                    fontSize = 11.sp,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            }
+        },
+        confirmButton = {
+            TextButton(
+                enabled = text.split(',')
+                    .mapNotNull { it.trim().toIntOrNull() }
+                    .isNotEmpty(),
+                onClick = { onSave(text.trim()) }
+            ) { Text("保存") }
+        },
+        dismissButton = { TextButton(onClick = onDismiss) { Text("取消") } }
+    )
+}
+
+@Composable
+private fun GroupEditDialog(
+    editing: WhitelistGroup?,
+    onDismiss: () -> Unit,
+    onSave: (WhitelistGroup) -> Unit
+) {
+    var name by remember { mutableStateOf(editing?.name ?: "") }
+    var start by remember { mutableStateOf(editing?.startMinute?.toHhMm() ?: "19:00") }
+    var end by remember { mutableStateOf(editing?.endMinute?.toHhMm() ?: "22:00") }
+    var selected by remember { mutableStateOf(editing?.packages ?: emptySet()) }
+
+    val apps by produceState(initialValue = emptyList<AppInfo>()) {
+        value = Repos.installedApps.loadLaunchableApps()
+    }
+
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text(if (editing == null) "新建分组" else "编辑分组") },
+        text = {
+            Column {
+                OutlinedTextField(
+                    value = name,
+                    onValueChange = { name = it },
+                    singleLine = true,
+                    label = { Text("分组名") }
+                )
+                Spacer(Modifier.height(8.dp))
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    OutlinedTextField(
+                        value = start,
+                        onValueChange = { start = it },
+                        singleLine = true,
+                        label = { Text("开始 HH:mm") },
+                        modifier = Modifier.weight(1f)
+                    )
+                    OutlinedTextField(
+                        value = end,
+                        onValueChange = { end = it },
+                        singleLine = true,
+                        label = { Text("结束 HH:mm") },
+                        modifier = Modifier.weight(1f)
+                    )
+                }
+                Spacer(Modifier.height(8.dp))
+                Text(
+                    text = "选择该时段可用的应用（已选 ${selected.size} 个）",
+                    fontSize = 12.sp,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+                Spacer(Modifier.height(4.dp))
+                LazyColumn(modifier = Modifier.height(280.dp)) {
+                    items(apps, key = { it.packageName }) { app ->
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .clickable {
+                                    selected = if (app.packageName in selected) {
+                                        selected - app.packageName
+                                    } else {
+                                        selected + app.packageName
+                                    }
+                                }
+                                .padding(vertical = 4.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Text(
+                                text = app.label,
+                                modifier = Modifier.weight(1f),
+                                fontSize = 14.sp,
+                                maxLines = 1
+                            )
+                            Checkbox(
+                                checked = app.packageName in selected,
+                                onCheckedChange = null
+                            )
+                        }
+                    }
+                }
+            }
+        },
+        confirmButton = {
+            TextButton(
+                enabled = name.isNotBlank() &&
+                    parseHhMm(start) != null &&
+                    parseHhMm(end) != null,
+                onClick = {
+                    val s = parseHhMm(start) ?: return@TextButton
+                    val e = parseHhMm(end) ?: return@TextButton
+                    onSave(
+                        WhitelistGroup(
+                            id = editing?.id ?: Repos.groups.nextId(),
+                            name = name.trim(),
+                            packages = selected,
+                            startMinute = s,
+                            endMinute = e,
+                            enabled = editing?.enabled ?: true
+                        )
+                    )
+                }
+            ) { Text("保存") }
+        },
+        dismissButton = { TextButton(onClick = onDismiss) { Text("取消") } }
     )
 }

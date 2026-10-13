@@ -91,8 +91,11 @@ object LockOverlay {
                 WindowManager.LayoutParams.MATCH_PARENT,
                 WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY,
                 // 可聚焦 + 可触摸（默认），不设 NOT_FOCUSABLE；
-                // LAYOUT_IN_SCREEN 铺满到屏幕边缘；HARDWARE_ACCELERATED 给 Compose 用。
+                // LAYOUT_IN_SCREEN + LAYOUT_NO_LIMITS 让窗口延伸到状态栏/导航栏底下，
+                // 否则状态栏会露出它后面桌面的颜色，和锁机页黑底不一致；
+                // HARDWARE_ACCELERATED 给 Compose 用。
                 WindowManager.LayoutParams.FLAG_LAYOUT_IN_SCREEN or
+                    WindowManager.LayoutParams.FLAG_LAYOUT_NO_LIMITS or
                     WindowManager.LayoutParams.FLAG_HARDWARE_ACCELERATED,
                 PixelFormat.OPAQUE
             )

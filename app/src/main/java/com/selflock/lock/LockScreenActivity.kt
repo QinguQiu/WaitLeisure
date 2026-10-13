@@ -2,6 +2,7 @@ package com.selflock.lock
 
 import android.content.Context
 import android.content.Intent
+import android.graphics.BitmapFactory
 import android.os.Build
 import android.os.Bundle
 import android.view.WindowManager
@@ -179,6 +180,12 @@ internal fun LockScreenRoute(onExit: () -> Unit) {
 
     val whitelist by Repos.whitelist.packages.collectAsState()
 
+    // 当前生效的完整白名单（全局 + 生效分组），随 now 每秒重算一次。
+    // 分组是按时间段生效的，所以必须跟着时钟走，不能只在进入时算一次。
+    val shownWhitelist = remember(now, whitelist) {
+        Repos.effectiveWhitelist().sorted()
+    }
+
     // 锁定到期后自动退场
     LaunchedEffect(now) {
         if (!Repos.lockState.isLockedNow()) {
@@ -189,7 +196,7 @@ internal fun LockScreenRoute(onExit: () -> Unit) {
 
     LockScreen(
         now = now,
-        whitelist = whitelist.sorted(),
+        whitelist = shownWhitelist,
         onLaunchApp = { pkg -> launchApp(context, pkg) },
         onUnlock = {
             LockController.unlock(context)
@@ -207,71 +214,102 @@ private fun LockScreen(
 ) {
     var showPinDialog by remember { mutableStateOf(false) }
 
-    Column(
-        modifier = Modifier
-            .fillMaxSize()
-            .background(Color.Black)
-            .padding(horizontal = 24.dp),
-        horizontalAlignment = Alignment.CenterHorizontally
-    ) {
-        Spacer(Modifier.height(64.dp))
+    // 壁纸：有自定义图片就用图（压一层半透明黑保证文字可读），否则用纯色。
+    val wallpaper = remember {
+        val path = Repos.prefs.wallpaperImagePath
+        if (path != null) {
+            runCatching { BitmapFactory.decodeFile(path)?.asImageBitmap() }.getOrNull()
+        } else {
+            null
+        }
+    }
 
-        Text(
-            text = remember(now) {
-                SimpleDateFormat("HH:mm", Locale.getDefault()).format(Date(now))
-            },
-            color = Color.White,
-            fontSize = 68.sp,
-            fontWeight = FontWeight.Light
-        )
+    Box(modifier = Modifier.fillMaxSize()) {
+        if (wallpaper != null) {
+            Image(
+                bitmap = wallpaper,
+                contentDescription = null,
+                contentScale = ContentScale.Crop,
+                modifier = Modifier.fillMaxSize()
+            )
+            Box(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .background(Color.Black.copy(alpha = 0.45f))
+            )
+        }
 
-        Text(
-            text = remember(now) {
-                SimpleDateFormat("M月d日 EEEE", Locale.CHINA).format(Date(now))
-            },
-            color = Color(0xFF9E9E9E),
-            fontSize = 14.sp
-        )
-
-        Spacer(Modifier.height(24.dp))
-
-        Text(
-            text = "\uD83D\uDD12",
-            fontSize = 24.sp
-        )
-
-        Spacer(Modifier.height(8.dp))
-
-        Text(
-            text = stringResource(R.string.lock_title),
-            color = Color.White,
-            fontSize = 19.sp,
-            fontWeight = FontWeight.SemiBold
-        )
-
-        Spacer(Modifier.height(4.dp))
-
-        Text(
-            text = remainingText(now),
-            color = Color(0xFF9E9E9E),
-            fontSize = 13.sp
-        )
-
-        Spacer(Modifier.height(32.dp))
-
-        WhitelistSection(
-            packages = whitelist,
-            onLaunch = onLaunchApp,
-            modifier = Modifier.weight(1f)
-        )
-
-        OutlinedButton(
-            onClick = { showPinDialog = true },
+        Column(
             modifier = Modifier
-                .fillMaxWidth()
-                .padding(bottom = 40.dp)
+                .fillMaxSize()
+                .background(if (wallpaper == null) Color(Repos.prefs.wallpaperColor) else Color.Transparent)
+                .padding(horizontal = 24.dp),
+            horizontalAlignment = Alignment.CenterHorizontally
         ) {
-            Text(stringResource(R.string.lock_unlock))
+            Spacer(Modifier.height(64.dp))
+
+            Text(
+                text = remember(now) {
+                    SimpleDateFormat("HH:mm", Locale.getDefault()).format(Date(now))
+                },
+                color = Color.White,
+                fontSize = 68.sp,
+                fontWeight = FontWeight.Light
+            )
+
+            Text(
+                text = remember(now) {
+                    SimpleDateFormat("M月d日 EEEE", Locale.CHINA).format(Date(now))
+                },
+                color = Color(0xFF9E9E9E),
+                fontSize = 14.sp
+            )
+
+            Spacer(Modifier.height(24.dp))
+
+            Text(
+                text = "\uD83D\uDD12",
+                fontSize = 24.sp
+            )
+
+            Spacer(Modifier.height(8.dp))
+
+            Text(
+                text = stringResource(R.string.lock_title),
+                color = Color.White,
+                fontSize = 19.sp,
+                fontWeight = FontWeight.SemiBold
+            )
+
+            Spacer(Modifier.height(4.dp))
+
+            Text(
+                text = remainingText(now),
+                color = Color(0xFF9E9E9E),
+                fontSize = 13.sp
+            )
+
+            Spacer(Modifier.height(32.dp))
+
+            WhitelistSection(
+                packages = whitelist,
+                onLaunch = onLaunchApp,
+                modifier = Modifier.weight(1f)
+            )
+
+            // 「允许密码解锁」开关关闭时，不显示解锁按钮 —— 严格锁，只能等时间到。
+            if (Repos.prefs.allowPinUnlock) {
+                OutlinedButton(
+                    onClick = { showPinDialog = true },
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(bottom = 40.dp)
+                ) {
+                    Text(stringResource(R.string.lock_unlock))
+                }
+            } else {
+                Spacer(Modifier.height(40.dp))
+            }
         }
     }
 
