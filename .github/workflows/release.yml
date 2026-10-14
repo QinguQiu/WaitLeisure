@@ -64,24 +64,39 @@ jobs:
       - name: Restore release keystore
         env:
           BUNDLE: ${{ secrets.RELEASE_KEYSTORE }}
+          B64_SECRET: ${{ secrets.RELEASE_KEYSTORE_BASE64 }}
+          PWD_SECRET: ${{ secrets.RELEASE_KEYSTORE_PASSWORD }}
+          ALIAS_SECRET: ${{ secrets.RELEASE_KEY_ALIAS }}
         run: |
-          if [ -z "$BUNDLE" ]; then
-            echo "::error::缺少 Secret RELEASE_KEYSTORE —— 没有它就签不出能覆盖安装的包"
+          # 两种配法都支持：
+          #   A. 单个 RELEASE_KEYSTORE = <base64>|<口令>|<别名>
+          #   B. 四个分开的 Secret（base64 / 口令 / 别名 / 密钥口令）
+          # A 优先。B 是兼容旧配法 —— 它有个已知的坑：base64 有 3696 字符、
+          # 口令只有 24 字符，都是乱码，粘贴时串行了肉眼看不出来。
+          if [ -n "$BUNDLE" ]; then
+            KEYSTORE_B64="${BUNDLE%%|*}"
+            REST="${BUNDLE#*|}"
+            STORE_PASSWORD="${REST%%|*}"
+            KEY_ALIAS="${REST#*|}"
+            echo "使用单个 RELEASE_KEYSTORE（${#BUNDLE} 字符）"
+            if [ "$KEYSTORE_B64" = "$BUNDLE" ] || [ "$REST" = "$BUNDLE" ]; then
+              echo "::error::RELEASE_KEYSTORE 格式不对 —— 需要 <base64>|<口令>|<别名> 三段。bundle_len=${#BUNDLE}"
+              exit 1
+            fi
+          elif [ -n "$B64_SECRET" ]; then
+            KEYSTORE_B64="$B64_SECRET"
+            STORE_PASSWORD="$PWD_SECRET"
+            KEY_ALIAS="${ALIAS_SECRET:-waitleisure}"
+            echo "使用四个分开的 Secret"
+          else
+            echo "::error::没有配签名密钥 —— 建 RELEASE_KEYSTORE，或 RELEASE_KEYSTORE_BASE64 等四个"
             exit 1
           fi
 
-          KEYSTORE_B64="${BUNDLE%%|*}"
-          REST="${BUNDLE#*|}"
-          STORE_PASSWORD="${REST%%|*}"
-          KEY_ALIAS="${REST#*|}"
-
-          # 三段都得在，而且口令不该长到离谱（那通常意味着把 base64 粘进来了）
-          if [ "$KEYSTORE_B64" = "$BUNDLE" ] || [ "$REST" = "$BUNDLE" ]; then
-            echo "::error::RELEASE_KEYSTORE 格式不对 —— 需要 <base64>|<口令>|<别名> 三段用竖线分隔。bundle_len=${#BUNDLE}"
-            exit 1
-          fi
+          # 口令不该长到离谱 —— 那说明把 base64 粘到口令那一栏了。
+          # 这一条就是上一轮定位到的故障（pwd_len=3696）。
           if [ "${#STORE_PASSWORD}" -gt 200 ]; then
-            echo "::error::口令字段有 ${#STORE_PASSWORD} 个字符，太长了 —— 多半把 base64 粘到第二段了。bundle_len=${#BUNDLE}"
+            echo "::error::口令字段有 ${#STORE_PASSWORD} 个字符，太长了 —— 多半把 base64 粘到口令那一栏了。"
             exit 1
           fi
 
