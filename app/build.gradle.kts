@@ -1,3 +1,8 @@
+// 注意：这里必须用 import 而不是写 java.util.Properties ——
+// 在 Gradle Kotlin DSL 脚本里，`java` 会被解析成 JavaPluginExtension 那个扩展，
+// 而不是 java 包（踩过：报 "Unresolved reference 'load'"）。
+import java.util.Properties
+
 plugins {
     alias(libs.plugins.android.application)
     alias(libs.plugins.kotlin.compose)
@@ -21,10 +26,54 @@ val gitCommitCount: Int = runCatching {
     }.standardOutput.asText.get().trim().toInt()
 }.getOrDefault(1)
 
+// ---------------------------------------------------------------------------
+// release 签名：固定一把 keystore，本地和 CI 用**同一把**
+//
+// 为什么必须固定：GitHub Actions 每次跑都在全新的虚拟机上重新生成
+// ~/.android/debug.keystore —— 于是每个 Release 的签名都不一样，
+// 用户根本装不上更新（INSTALL_FAILED_UPDATE_INCOMPATIBLE），
+// 只能卸载重装，白名单 / 定时 / 任务全部重配。
+//
+// 密钥从哪来（都不进仓库）：
+//   · 本地：local.properties 里的 waitleisure.* 五项（该文件已 gitignore）
+//   · CI  ：GitHub Secrets 注入的环境变量 WAITLEISURE_*
+//
+// 拿不到就退回 debug 签名 —— 保证「clone 下来直接编译」不会因为缺密钥而失败。
+// ---------------------------------------------------------------------------
+val localProps = Properties().apply {
+    val f = rootProject.file("local.properties")
+    if (f.exists()) f.inputStream().use { load(it) }
+}
+
+fun signingSecret(propKey: String, envKey: String): String? =
+    System.getenv(envKey)?.takeIf { it.isNotBlank() }
+        ?: localProps.getProperty(propKey)?.takeIf { it.isNotBlank() }
+
+val releaseStorePassword = signingSecret("waitleisure.storePassword", "WAITLEISURE_STORE_PASSWORD")
+val releaseKeyAlias = signingSecret("waitleisure.keyAlias", "WAITLEISURE_KEY_ALIAS")
+val releaseKeyPassword = signingSecret("waitleisure.keyPassword", "WAITLEISURE_KEY_PASSWORD")
+    ?: releaseStorePassword
+val releaseKeyFile = file(
+    signingSecret("waitleisure.storeFile", "WAITLEISURE_KEYSTORE")
+        ?: "${System.getProperty("user.home")}/.android/waitleisure-release.jks"
+)
+val hasReleaseKey = releaseKeyFile.exists() && !releaseStorePassword.isNullOrBlank()
+
 android {
     namespace = "com.waitleisure"
     compileSdk {
         version = release(37)
+    }
+
+    signingConfigs {
+        if (hasReleaseKey) {
+            create("release") {
+                storeFile = releaseKeyFile
+                storePassword = releaseStorePassword
+                keyAlias = releaseKeyAlias ?: "waitleisure"
+                keyPassword = releaseKeyPassword
+            }
+        }
     }
 
     defaultConfig {
@@ -39,13 +88,13 @@ android {
 
     buildTypes {
         release {
-            // Release 直接复用 debug 签名。
-            //
-            // 这是个自用/侧载项目，不上架商店 —— 用正式 keystore 反而带来
-            // 「keystore 丢了就再也签不出能覆盖安装的包」的风险。
-            // 真要上架时把这里换成自己的 signingConfig 即可。
-            // AGP 会在缺失时自动生成 ~/.android/debug.keystore，CI 上同样适用。
-            signingConfig = signingConfigs.getByName("debug")
+            // 有正式 keystore 就用它；没有（比如别人 clone 下来）退回 debug 签名，
+            // 总比构建失败强。CI 上会显式断言 keystore 已注入，见 release.yml。
+            signingConfig = if (hasReleaseKey) {
+                signingConfigs.getByName("release")
+            } else {
+                signingConfigs.getByName("debug")
+            }
 
             // ⚠️ 这里**曾经**有一段 AGP 9 的 optimization 配置：
             //

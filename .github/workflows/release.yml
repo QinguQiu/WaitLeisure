@@ -42,11 +42,53 @@ jobs:
       - name: Grant execute permission for gradlew
         run: chmod +x ./gradlew
 
-      # Release 变体在 build.gradle.kts 里配了 signingConfig = debug，
-      # 所以这里产出的就是**已签名的可安装包**。
-      # AGP 会在缺失时自动生成 ~/.android/debug.keystore，CI 上同样适用。
+      # ---------------------------------------------------------------------
+      # 恢复正式签名用的 keystore
+      #
+      # 为什么必须有这一步：GitHub Actions 每次都在全新的虚拟机上跑，
+      # AGP 会**重新生成**一个 ~/.android/debug.keystore —— 于是每个 Release
+      # 的签名都不一样，用户装更新时报
+      #   INSTALL_FAILED_UPDATE_INCOMPATIBLE
+      # 只能卸载重装，白名单 / 定时 / 任务全部重配。
+      #
+      # 所以签名密钥必须固定，而且**不能进仓库**（仓库是公开的），
+      # 用 GitHub Secrets 在构建时注入。
+      # ---------------------------------------------------------------------
+      - name: Restore release keystore
+        env:
+          KEYSTORE_B64: ${{ secrets.RELEASE_KEYSTORE_BASE64 }}
+        run: |
+          if [ -z "$KEYSTORE_B64" ]; then
+            echo "::error::缺少 Secret RELEASE_KEYSTORE_BASE64 —— 没有它就签不出能覆盖安装的包"
+            echo "请到 Settings → Secrets and variables → Actions 添加，见 README/TECHNICAL 的说明。"
+            exit 1
+          fi
+          mkdir -p "$HOME/.android"
+          printf '%s' "$KEYSTORE_B64" | base64 -d > "$HOME/.android/waitleisure-release.jks"
+          echo "keystore 已就位：$(stat -c%s "$HOME/.android/waitleisure-release.jks") bytes"
+
       - name: Build release APK
+        env:
+          # keystore 的路径不用给：build.gradle.kts 默认就找
+          # ${user.home}/.android/waitleisure-release.jks，runner 上正好是
+          # 上一步解出来的那个位置。
+          WAITLEISURE_STORE_PASSWORD: ${{ secrets.RELEASE_KEYSTORE_PASSWORD }}
+          WAITLEISURE_KEY_ALIAS: ${{ secrets.RELEASE_KEY_ALIAS }}
+          WAITLEISURE_KEY_PASSWORD: ${{ secrets.RELEASE_KEY_PASSWORD }}
         run: ./gradlew :app:assembleRelease --no-daemon --stacktrace
+
+      # 兜底：万一 keystore 没生效、悄悄退回 debug 签名，这里直接失败，
+      # 而不是把一个用户装不上的包发出去。
+      - name: Verify signature is not the debug key
+        run: |
+          APK=app/build/outputs/apk/release/app-release.apk
+          APKSIGNER=$(ls "$ANDROID_HOME"/build-tools/*/apksigner | sort -V | tail -1)
+          "$APKSIGNER" verify --print-certs "$APK" | grep -E 'DN:|SHA-256 digest' || true
+          DN=$("$APKSIGNER" verify --print-certs "$APK" | grep 'certificate DN' | head -1)
+          if echo "$DN" | grep -q 'CN=Android Debug'; then
+            echo "::error::签出来的是 debug key，不是正式 keystore —— 用户会装不上更新"
+            exit 1
+          fi
 
       - name: Run unit tests
         run: ./gradlew :app:testDebugUnitTest --no-daemon --stacktrace
