@@ -1,6 +1,12 @@
 <?xml version="1.0" encoding="utf-8"?>
+<!--
+  自适应图标：白底 + 用户给的「极简黑白玫瑰小丘线稿」。
+  背景刻意用 @color 而不是 @drawable/ic_launcher_background ——
+  后者是旧版留下的蓝色矢量，之前一直把前景的黑线压在蓝底上（对比度很差）。
+  monochrome 供系统主题图标用，直接复用前景的 alpha。
+-->
 <adaptive-icon xmlns:android="http://schemas.android.com/apk/res/android">
-    <background android:drawable="@drawable/ic_launcher_background" />
+    <background android:drawable="@color/ic_launcher_background" />
     <foreground android:drawable="@drawable/ic_launcher_foreground" />
     <monochrome android:drawable="@drawable/ic_launcher_foreground" />
 </adaptive-icon>
