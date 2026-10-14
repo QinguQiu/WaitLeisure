@@ -4,6 +4,7 @@ import android.app.Service
 import android.content.Intent
 import android.os.IBinder
 import com.selflock.data.Repos
+import com.selflock.util.CoreAllowed
 import com.selflock.util.DiagLog
 import com.selflock.util.ForegroundDetector
 import com.selflock.util.Notifications
@@ -101,7 +102,11 @@ class LockForegroundService : Service() {
                         // 无障碍「假绑定」时一条事件都收不到，用使用情况访问兜底
                         pkg = ForegroundDetector.currentForegroundPackage(this@LockForegroundService)
                     }
-                    val definitelyWhitelisted = pkg != null && Repos.isWhitelisted(pkg)
+                    // **核心放行也要算数**：输入法、SystemUI、拨号盘不属于用户白名单，
+                    // 但它们是锁机能不能用的前提。之前这里只查 isWhitelisted，
+                    // 于是白名单应用里一弹键盘，看门狗就把遮罩盖回来 —— 应用直接没法用。
+                    val definitelyWhitelisted = pkg != null &&
+                        (Repos.isWhitelisted(pkg) || CoreAllowed.contains(this@LockForegroundService, pkg))
 
                     if (definitelyWhitelisted) {
                         // 白名单应用在前台：悬浮窗让开，用户才能用它。

@@ -11,6 +11,7 @@ import android.provider.Settings
 import android.telecom.TelecomManager
 import android.view.accessibility.AccessibilityEvent
 import com.selflock.data.Repos
+import com.selflock.util.CoreAllowed
 import com.selflock.util.DiagLog
 
 /**
@@ -276,28 +277,7 @@ class LockAccessibilityService : AccessibilityService() {
         return found
     }
 
-    private fun alwaysAllowedPackages(): Set<String> {
-        val set = mutableSetOf(
-            "android",
-            "com.android.systemui",
-            "com.android.permissioncontroller"
-        )
-        currentImePackage()?.let(set::add)
-        defaultDialerPackage()?.let(set::add)
-        return set
-    }
-
-    /** 当前默认输入法。动态获取，这样用户换输入法也不会把键盘锁死。 */
-    private fun currentImePackage(): String? = runCatching {
-        Settings.Secure.getString(contentResolver, Settings.Secure.DEFAULT_INPUT_METHOD)
-            ?.substringBefore('/')
-            ?.takeIf { it.isNotEmpty() }
-    }.getOrNull()
-
-    /** 默认拨号盘：保证锁定期间仍然能打紧急电话。 */
-    private fun defaultDialerPackage(): String? = runCatching {
-        getSystemService(TelecomManager::class.java)?.defaultDialerPackage
-    }.getOrNull()
+    private fun alwaysAllowedPackages(): Set<String> = CoreAllowed.packages(this)
 
     companion object {
         /** 最近一次切到前台的应用包名。 */

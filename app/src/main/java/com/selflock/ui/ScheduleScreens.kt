@@ -43,10 +43,12 @@ import androidx.compose.ui.unit.sp
 import com.selflock.R
 import com.selflock.alarm.AlarmScheduler
 import com.selflock.data.Repos
+import com.selflock.lock.LockController
 import com.selflock.model.DAY_LABELS
 import com.selflock.model.HolidayCalendar
 import com.selflock.model.HolidayMode
 import com.selflock.model.Schedule
+import com.selflock.model.activeWindowEndMillis
 import com.selflock.model.describeDays
 import com.selflock.model.describeHolidayMode
 import com.selflock.model.toDurationText
@@ -426,6 +428,16 @@ private fun persistSchedule(context: Context, schedule: Schedule) {
     // 先清掉旧闹钟，再按新配置重排，避免改了时间之后旧闹钟还在
     AlarmScheduler.cancel(context, schedule.id)
     AlarmScheduler.scheduleNextStart(context, schedule)
+
+    // 关键补漏：如果**此刻已经落在生效窗口里**，光排「下一次开始」是不够的 ——
+    // 14:00 才建一条 13:00 开始、持续 2 小时的规则时，下一次开始是明天 13:00，
+    // 今天这段还在进行的窗口会被整个跳过（实测踩到）。
+    // 这时立刻锁上，并只锁到窗口结束。
+    val windowEnd = schedule.activeWindowEndMillis()
+    if (windowEnd != null) {
+        LockController.lock(context, windowEnd, schedule.id)
+        AlarmScheduler.scheduleEnd(context, windowEnd, schedule.id)
+    }
 }
 
 

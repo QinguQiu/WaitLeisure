@@ -1,6 +1,8 @@
 package com.selflock.model
 
+import java.time.Instant
 import java.time.LocalDate
+import java.time.ZoneId
 
 /** 安装在设备上、且带桌面启动入口的应用。L1 只让用户从这些应用里挑白名单。 */
 data class AppInfo(
@@ -83,6 +85,40 @@ fun Schedule.describeHolidayMode(): String? = when (holidayMode) {
     HolidayMode.IGNORE -> null
     HolidayMode.SKIP_HOLIDAY -> "跳过法定节假日"
     HolidayMode.ONLY_HOLIDAY -> "仅法定节假日"
+}
+
+/**
+ * 这条规则此刻是否正处于生效窗口内；是的话返回窗口的**结束时刻**，否则 null。
+ *
+ * 为什么需要它：[AlarmScheduler.nextTriggerMillis] 只会往后找**开始时刻** ——
+ * 14:00 才建一条「13:00 开始、持续 2 小时」的规则时，它会直接排到明天 13:00，
+ * 今天这段还在进行的窗口被整个跳过（实测踩到）。
+ *
+ * 同时检查今天和昨天：跨午夜的长窗口（23:00 锁到次日 07:00）
+ * 名义上属于**昨天**那条规则，只看今天会漏。
+ */
+fun Schedule.activeWindowEndMillis(
+    now: Long = System.currentTimeMillis(),
+    zone: ZoneId = ZoneId.systemDefault()
+): Long? {
+    val nowInstant = Instant.ofEpochMilli(now)
+    val today = nowInstant.atZone(zone).toLocalDate()
+
+    for (offset in longArrayOf(0L, -1L)) {
+        val date = today.plusDays(offset)
+        // 单次（days 为空）不挑日子；其余走 matchesDate，已经叠加了节假日模式
+        if (days.isNotEmpty() && !matchesDate(date)) continue
+
+        val start = date.atTime(startMinutes / 60, startMinutes % 60)
+            .atZone(zone)
+            .toInstant()
+        val end = start.plusSeconds(durationMinutes * 60L)
+
+        if (!nowInstant.isBefore(start) && nowInstant.isBefore(end)) {
+            return end.toEpochMilli()
+        }
+    }
+    return null
 }
 
 /** 星期标签，索引 = DayOfWeek.value - 1。 */
