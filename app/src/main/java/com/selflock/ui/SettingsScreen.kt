@@ -71,9 +71,6 @@ fun SettingsScreen() {
     var showPinDialog by remember { mutableStateOf(false) }
     var allowPinUnlock by remember { mutableStateOf(Repos.prefs.allowPinUnlock) }
     var showQuickEdit by remember { mutableStateOf(false) }
-    val groups by Repos.groups.groups.collectAsState()
-    var showGroupEdit by remember { mutableStateOf(false) }
-    var editingGroup by remember { mutableStateOf<WhitelistGroup?>(null) }
     var showPomodoroEdit by remember { mutableStateOf(false) }
     var pinSet by remember { mutableStateOf(!Repos.prefs.pinHash.isNullOrEmpty()) }
 
@@ -205,52 +202,6 @@ fun SettingsScreen() {
         }
 
         GroupHeader(
-            title = "白名单",
-            hint = "锁定期间哪些应用还能用"
-        )
-
-        SectionCard(
-            title = "白名单分组",
-            subtitle = "不同时段可用不同应用（全局白名单始终生效）"
-        ) {
-            if (groups.isEmpty()) {
-                Text(
-                    text = "还没有分组。",
-                    fontSize = 12.sp,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                )
-            } else {
-                groups.forEach { g ->
-                    Row(
-                        verticalAlignment = Alignment.CenterVertically,
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .clickable { editingGroup = g; showGroupEdit = true }
-                            .padding(vertical = 6.dp)
-                    ) {
-                        Column(Modifier.weight(1f)) {
-                            Text(
-                                text = "${g.name} · ${g.startMinute.toHhMm()}-${g.endMinute.toHhMm()} · ${g.packages.size} 个应用",
-                                fontSize = 13.sp
-                            )
-                            if (!g.enabled) {
-                                Text(
-                                    text = "已停用",
-                                    fontSize = 11.sp,
-                                    color = MaterialTheme.colorScheme.error
-                                )
-                            }
-                        }
-                        TextButton(onClick = { Repos.groups.remove(g.id) }) { Text("删除") }
-                    }
-                }
-            }
-            TextButton(onClick = { editingGroup = null; showGroupEdit = true }) {
-                Text("＋ 新建分组")
-            }
-        }
-
-        GroupHeader(
             title = "专注模式",
             hint = "番茄钟轮转"
         )
@@ -295,17 +246,6 @@ fun SettingsScreen() {
             onSave = { text ->
                 Repos.prefs.quickDurations = text
                 showQuickEdit = false
-            }
-        )
-    }
-
-    if (showGroupEdit) {
-        GroupEditDialog(
-            editing = editingGroup,
-            onDismiss = { showGroupEdit = false },
-            onSave = { group ->
-                Repos.groups.save(group)
-                showGroupEdit = false
             }
         )
     }
@@ -376,15 +316,6 @@ fun quickDurationsList(): List<Int> =
         .filter { it > 0 }
         .ifEmpty { listOf(5, 15, 30, 60) }
 
-private fun parseHhMm(s: String): Int? {
-    val parts = s.split(':')
-    if (parts.size != 2) return null
-    val h = parts[0].toIntOrNull() ?: return null
-    val m = parts[1].toIntOrNull() ?: return null
-    if (h !in 0..23 || m !in 0..59) return null
-    return h * 60 + m
-}
-
 @Composable
 private fun QuickDurationsDialog(onDismiss: () -> Unit, onSave: (String) -> Unit) {
     var text by remember { mutableStateOf(Repos.prefs.quickDurations) }
@@ -415,111 +346,6 @@ private fun QuickDurationsDialog(onDismiss: () -> Unit, onSave: (String) -> Unit
                     .mapNotNull { it.trim().toIntOrNull() }
                     .isNotEmpty(),
                 onClick = { onSave(text.trim()) }
-            ) { Text("保存") }
-        },
-        dismissButton = { TextButton(onClick = onDismiss) { Text("取消") } }
-    )
-}
-
-@Composable
-private fun GroupEditDialog(
-    editing: WhitelistGroup?,
-    onDismiss: () -> Unit,
-    onSave: (WhitelistGroup) -> Unit
-) {
-    var name by remember { mutableStateOf(editing?.name ?: "") }
-    var start by remember { mutableStateOf(editing?.startMinute?.toHhMm() ?: "19:00") }
-    var end by remember { mutableStateOf(editing?.endMinute?.toHhMm() ?: "22:00") }
-    var selected by remember { mutableStateOf(editing?.packages ?: emptySet()) }
-
-    val apps by produceState(initialValue = emptyList<AppInfo>()) {
-        value = Repos.installedApps.loadLaunchableApps()
-    }
-
-    AlertDialog(
-        onDismissRequest = onDismiss,
-        title = { Text(if (editing == null) "新建分组" else "编辑分组") },
-        text = {
-            Column {
-                OutlinedTextField(
-                    value = name,
-                    onValueChange = { name = it },
-                    singleLine = true,
-                    label = { Text("分组名") }
-                )
-                Spacer(Modifier.height(8.dp))
-                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    OutlinedTextField(
-                        value = start,
-                        onValueChange = { start = it },
-                        singleLine = true,
-                        label = { Text("开始 HH:mm") },
-                        modifier = Modifier.weight(1f)
-                    )
-                    OutlinedTextField(
-                        value = end,
-                        onValueChange = { end = it },
-                        singleLine = true,
-                        label = { Text("结束 HH:mm") },
-                        modifier = Modifier.weight(1f)
-                    )
-                }
-                Spacer(Modifier.height(8.dp))
-                Text(
-                    text = "选择该时段可用的应用（已选 ${selected.size} 个）",
-                    fontSize = 12.sp,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                )
-                Spacer(Modifier.height(4.dp))
-                LazyColumn(modifier = Modifier.height(280.dp)) {
-                    items(apps, key = { it.packageName }) { app ->
-                        Row(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .clickable {
-                                    selected = if (app.packageName in selected) {
-                                        selected - app.packageName
-                                    } else {
-                                        selected + app.packageName
-                                    }
-                                }
-                                .padding(vertical = 4.dp),
-                            verticalAlignment = Alignment.CenterVertically
-                        ) {
-                            Text(
-                                text = app.label,
-                                modifier = Modifier.weight(1f),
-                                fontSize = 14.sp,
-                                maxLines = 1
-                            )
-                            Checkbox(
-                                checked = app.packageName in selected,
-                                onCheckedChange = null
-                            )
-                        }
-                    }
-                }
-            }
-        },
-        confirmButton = {
-            TextButton(
-                enabled = name.isNotBlank() &&
-                    parseHhMm(start) != null &&
-                    parseHhMm(end) != null,
-                onClick = {
-                    val s = parseHhMm(start) ?: return@TextButton
-                    val e = parseHhMm(end) ?: return@TextButton
-                    onSave(
-                        WhitelistGroup(
-                            id = editing?.id ?: Repos.groups.nextId(),
-                            name = name.trim(),
-                            packages = selected,
-                            startMinute = s,
-                            endMinute = e,
-                            enabled = editing?.enabled ?: true
-                        )
-                    )
-                }
             ) { Text("保存") }
         },
         dismissButton = { TextButton(onClick = onDismiss) { Text("取消") } }
