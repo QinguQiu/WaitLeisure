@@ -102,30 +102,49 @@ class LockForegroundService : Service() {
                         // 无障碍「假绑定」时一条事件都收不到，用使用情况访问兜底
                         pkg = ForegroundDetector.currentForegroundPackage(this@LockForegroundService)
                     }
-                    // **核心放行也要算数**：输入法、SystemUI、拨号盘不属于用户白名单，
-                    // 但它们是锁机能不能用的前提。之前这里只查 isWhitelisted，
-                    // 于是白名单应用里一弹键盘，看门狗就把遮罩盖回来 —— 应用直接没法用。
-                    val definitelyWhitelisted = pkg != null &&
-                        (Repos.isWhitelisted(pkg) || CoreAllowed.contains(this@LockForegroundService, pkg))
 
-                    if (definitelyWhitelisted) {
-                        // 白名单应用在前台：悬浮窗让开，用户才能用它。
-                        // 这是无障碍之外的第二条「让开」路径 —— 无障碍假绑定时也能生效。
-                        if (LockOverlay.isShowing) {
-                            LockOverlay.hide()
+                    // 三种情况要分开处理，**不能把「核心放行」和「白名单应用」混为一谈**：
+                    //
+                    //   白名单应用  → 用户真的在用，遮罩必须让开
+                    //   核心放行    → 输入法 / 下拉栏 / 系统弹窗只是「盖在上面」，
+                    //                它不代表用户在用什么应用。既不该据此撤遮罩，
+                    //                也不该据此补盖（那会把底下的白名单应用盖住）——
+                    //                正确做法是**保持现状**。
+                    //
+                    // 踩过的坑：一开始把核心放行也当成「确定是白名单」，于是
+                    //   下拉栏打开 → 最后事件是 com.android.systemui → 判成白名单
+                    //   → 遮罩被撤掉后再也不补回来 → 锁机整个失效。
+                    val isWhitelistedApp = pkg != null && Repos.isWhitelisted(pkg)
+                    val isCoreOverlay = pkg != null &&
+                        CoreAllowed.contains(this@LockForegroundService, pkg)
+
+                    when {
+                        isWhitelistedApp -> {
+                            // 白名单应用在前台：悬浮窗让开，用户才能用它。
+                            // 这是无障碍之外的第二条「让开」路径 —— 无障碍假绑定时也能生效。
+                            if (LockOverlay.isShowing) {
+                                LockOverlay.hide()
+                            }
+                            escapeAttempts = 0
                         }
-                        escapeAttempts = 0
-                    } else if (!LockOverlay.isShowing) {
-                        escapeAttempts++
-                        if (escapeAttempts <= 3 || escapeAttempts % 10 == 0) {
-                            DiagLog.add(
-                                "看门狗",
-                                "悬浮窗不在，第 " + escapeAttempts + " 次盖上（pkg=" + pkg + "）"
-                            )
+
+                        isCoreOverlay -> {
+                            // 系统窗口盖着，判不出用户在用什么应用 —— 保持现状，什么都不做
+                            escapeAttempts = 0
                         }
-                        LockOverlay.show(this@LockForegroundService, "看门狗")
-                    } else {
-                        escapeAttempts = 0
+
+                        !LockOverlay.isShowing -> {
+                            escapeAttempts++
+                            if (escapeAttempts <= 3 || escapeAttempts % 10 == 0) {
+                                DiagLog.add(
+                                    "看门狗",
+                                    "悬浮窗不在，第 " + escapeAttempts + " 次盖上（pkg=" + pkg + "）"
+                                )
+                            }
+                            LockOverlay.show(this@LockForegroundService, "看门狗")
+                        }
+
+                        else -> escapeAttempts = 0
                     }
                 } else {
                     escapeAttempts = 0

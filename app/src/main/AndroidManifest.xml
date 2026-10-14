@@ -48,6 +48,14 @@
     <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
 
     <!--
+      锁机页自绘的状态栏要能主动展开下拉栏：悬浮窗整屏可触摸，会把系统自带的
+      「从状态栏下拉」手势一起吃掉（矩形窗口没法做局部触摸透传）。
+      所以自己识别手势 + 用这个权限展开。它是 normal 级，安装即授予。
+      「远离手机」也带这个权限，同一个原因。
+    -->
+    <uses-permission android:name="android.permission.EXPAND_STATUS_BAR" />
+
+    <!--
       只查询「有启动图标」的应用，读取白名单候选列表已经够用。
       刻意不使用 QUERY_ALL_PACKAGES —— 权限更小，且在 Google Play 上不会触发政策审查。
     -->

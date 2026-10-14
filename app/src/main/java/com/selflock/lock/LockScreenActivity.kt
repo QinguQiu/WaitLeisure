@@ -18,6 +18,7 @@ import androidx.activity.compose.setContent
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.gestures.detectVerticalDragGestures
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -51,6 +52,7 @@ import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.produceState
@@ -63,7 +65,9 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
@@ -375,7 +379,25 @@ private fun LockScreen(
 }
 
 /**
- * 自绘状态栏：左边时间，右边网络类型 + 电量。
+ * 主动展开通知栏（下拉栏）。
+ *
+ * `android.app.StatusBarManager` **不是公开 SDK API**（`android.os.StatusBarManager` 根本不存在），
+ * 只能走反射拿系统服务再把 `expandNotificationsPanel()` 调出来。
+ * 需要清单里的 `EXPAND_STATUS_BAR` 权限（normal 级，安装即授予）。
+ *
+ * 为什么非要这么做：悬浮窗整屏可触摸，会把系统自带的「从状态栏下拉」手势一起吃掉，
+ * 而矩形窗口没法做局部触摸透传 —— 所以只能自己识别手势再主动展开。
+ * 展开后下拉栏在悬浮窗之上，可以正常操作。
+ */
+private fun expandNotificationShade(context: Context) {
+    runCatching {
+        val service = context.getSystemService("statusbar")
+        val clazz = Class.forName("android.app.StatusBarManager")
+        clazz.getMethod("expandNotificationsPanel").invoke(service)
+    }
+}
+
+/** 自绘状态栏：左边时间，右边网络类型 + 电量。
  *
  * 为什么要自己画：悬浮窗为了盖住状态栏区域（让壁纸连续）把窗口铺到了 y=0，
  * 而铺满之后系统状态栏的图标就不再绘制了 —— 实测顶部整条只剩壁纸。
@@ -386,6 +408,21 @@ private fun LockScreen(
  */
 @Composable
 private fun OverlayStatusBar(now: Long, modifier: Modifier = Modifier) {
+    val context = LocalContext.current
+
+    // 悬浮窗是整屏可触摸的，会把「从状态栏下拉」这个系统手势一起吃掉 ——
+    // 实测遮罩盖着时下拉栏根本拉不下来（y=0 / y=50 / y=400 三处都试过，全部无效）。
+    // 矩形窗口没法做「局部触摸透传」，所以换条路：在这一条上自己识别下拉手势，
+    // 用 EXPAND_STATUS_BAR 权限主动展开下拉栏。
+    // 展开后下拉栏在悬浮窗**之上**（base layer 151000 > 111000），可以正常操作。
+    // 「远离手机」也带这个权限，正是同一个原因。
+    var dragged by remember { mutableFloatStateOf(0f) }
+    val threshold = with(LocalDensity.current) { 36.dp.toPx() }
+
+    fun expandShade() {
+        expandNotificationShade(context)
+    }
+
     val battery = rememberBatteryPercent()
     val network = rememberNetworkLabel(now)
     val inset = WindowInsets.statusBars.asPaddingValues().calculateTopPadding()
@@ -395,6 +432,23 @@ private fun OverlayStatusBar(now: Long, modifier: Modifier = Modifier) {
         modifier = modifier
             .fillMaxWidth()
             .height(barHeight)
+            .pointerInput(Unit) {
+                detectVerticalDragGestures(
+                    onDragStart = { dragged = 0f },
+                    onDragEnd = { dragged = 0f },
+                    onDragCancel = { dragged = 0f }
+                ) { _, dragAmount ->
+                    if (dragAmount > 0f) {
+                        dragged += dragAmount
+                        if (dragged >= threshold) {
+                            dragged = 0f
+                            expandShade()
+                        }
+                    } else {
+                        dragged = 0f
+                    }
+                }
+            }
             .padding(horizontal = 22.dp),
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.SpaceBetween
