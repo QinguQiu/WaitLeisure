@@ -28,7 +28,7 @@ import androidx.compose.ui.Modifier
  * 导航图标用 BMP 区字符（\uXXXX 转义），不依赖 material-icons 那个 artifact，
  * 同时保证源码本身保持纯 ASCII，避免任何编码问题。
  */
-private enum class Screen { Home, Whitelist, Schedules, ScheduleEdit, Settings, Permissions }
+private enum class Screen { Home, Whitelist, Schedules, ScheduleEdit, Settings, PermissionEditor }
 
 private data class Tab(val screen: Screen, val label: String, val glyph: String)
 
@@ -51,8 +51,8 @@ fun SelfLockNavHost() {
 
     // 二级页需要拦返回键；其余页面交给系统默认行为。
     // 「加固权限」是从首页右上角进来的二级页，返回时回首页。
-    BackHandler(enabled = screen == Screen.ScheduleEdit || screen == Screen.Permissions) {
-        screen = if (screen == Screen.Permissions) Screen.Home else Screen.Schedules
+    BackHandler(enabled = screen == Screen.ScheduleEdit || screen == Screen.PermissionEditor) {
+        screen = if (screen == Screen.PermissionEditor) Screen.Home else Screen.Schedules
     }
 
     Scaffold(
@@ -73,9 +73,9 @@ fun SelfLockNavHost() {
     ) { innerPadding ->
         Box(Modifier.padding(innerPadding)) {
             when (screen) {
-                Screen.Home -> HomeScreen(onOpenPermissions = { screen = Screen.Permissions })
+                Screen.Home -> HomeScreen(onOpenPermissions = { screen = Screen.PermissionEditor })
 
-                Screen.Permissions -> PermissionScreen(onBack = { screen = Screen.Home })
+                Screen.PermissionEditor -> PermissionScreen(onBack = { screen = Screen.Home })
 
                 Screen.Whitelist -> WhitelistScreen()
 
