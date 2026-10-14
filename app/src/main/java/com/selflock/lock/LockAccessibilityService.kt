@@ -62,6 +62,8 @@ class LockAccessibilityService : AccessibilityService() {
 
         // 记下最近的前台应用，供 LockForegroundService 做一次性复检
         lastPackage = pkg
+        // 单独记一条「非自己」的：遮罩自己产生的事件不能代表用户在用什么应用
+        if (pkg != packageName) lastNonSelfPackage = pkg
 
         // 目标应用真的到前台了 —— 免打扰窗口立刻结束。
         endGraceIfTargetArrived(pkg)
@@ -197,11 +199,16 @@ class LockAccessibilityService : AccessibilityService() {
             }
 
             // 前台明确是别的包、且属于白名单/核心放行时，不该补拉。
-            // lastPackage 可能是旧的（因此等于自己），那种情况要往下走继续补拉。
+            // lastPackage 可能是旧的（因此等于自己），那种情况要往下走继续补拉 ——
+            // 但补拉前必须先用「最近非自己」的包名复核一次，
+            // 否则会把用户正在使用的白名单应用重新盖住。
             val pkg = lastPackage
             if (pkg != null && pkg != packageName) {
                 if (pkg in lastCoreAllowed) return
                 if (Repos.isWhitelisted(pkg)) return
+            } else {
+                val real = lastNonSelfPackage
+                if (real != null && (real in lastCoreAllowed || Repos.isWhitelisted(real))) return
             }
 
             if (reassertAttempts >= MAX_REASSERT_ATTEMPTS) {
@@ -297,6 +304,18 @@ class LockAccessibilityService : AccessibilityService() {
         @Volatile
         private var lastPackage: String? = null
 
+        /**
+         * 最近一次「不是自己」的前台包名。
+         *
+         * 为什么需要单独记：悬浮窗和锁机页 Activity 都是 com.selflock，
+         * 遮罩每次盖上/撤下都会产生一条 pkg=com.selflock 的窗口事件。
+         * 于是用户点开白名单应用、遮罩刚让开的那一刻，[lastPackage] 往往正是「自己」，
+         * 拿它判前台就会把白名单应用误判成非白名单，把遮罩又盖回去 ——
+         * 真机表现就是「允许打开的应用被挡住」。
+         */
+        @Volatile
+        private var lastNonSelfPackage: String? = null
+
         /** 最近一次计算出的「必放行」包集合。 */
         @Volatile
         private var lastCoreAllowed: Set<String> = emptySet()
@@ -336,6 +355,13 @@ class LockAccessibilityService : AccessibilityService() {
 
         /** 供逃逸看门狗判断用：最近一次无障碍事件里的前台包名。 */
         fun lastSeenPackage(): String? = lastPackage
+
+        /**
+         * 供逃逸看门狗判断用：最近一次**不是自己**的前台包名。
+         * 判「用户到底在用什么应用」时必须用这个，不能用 [lastSeenPackage] ——
+         * 后者可能是遮罩自己产生的事件。
+         */
+        fun lastRealPackage(): String? = lastNonSelfPackage
 
         /** pkg 是否是默认桌面。 */
         fun isHomePackage(pkg: String?): Boolean = pkg != null && pkg in homePackages

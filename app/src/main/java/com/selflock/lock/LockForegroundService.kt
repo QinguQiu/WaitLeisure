@@ -90,9 +90,15 @@ class LockForegroundService : Service() {
                 //   - 前台未知（无障碍假绑定时 lastPackage 一直是 null）→ 盖上，
                 //     但先用使用情况访问兜底确认，避免误盖正在用的白名单应用
                 if (!inGrace) {
-                    var pkg = LockAccessibilityService.lastSeenPackage()
+                    // 用 lastRealPackage（最近一条「非自己」的事件），不用 lastSeenPackage ——
+                    // 悬浮窗/锁机页 Activity 都是 com.selflock，遮罩每次盖上撤下都会产生
+                    // 一条 pkg=com.selflock 的事件。用后者判前台会踩这个坑：
+                    // 用户点开白名单应用 → 遮罩让开 → 最后一条事件恰好是「遮罩自己」
+                    // → 判成「前台不是白名单」→ 遮罩被重新盖回去
+                    // → 表现就是「允许打开的应用被挡住」。
+                    var pkg = LockAccessibilityService.lastRealPackage()
                     if (pkg == null) {
-                        // 无障碍「假绑定」时 lastPackage 一直是 null，用使用情况访问兜底
+                        // 无障碍「假绑定」时一条事件都收不到，用使用情况访问兜底
                         pkg = ForegroundDetector.currentForegroundPackage(this@LockForegroundService)
                     }
                     val definitelyWhitelisted = pkg != null && Repos.isWhitelisted(pkg)
