@@ -39,7 +39,7 @@
 
 ## 下载安装
 
-1. 打开 [Releases 页面](https://github.com/yidongxue/SelfLock/releases)
+1. 打开 [Releases 页面](https://github.com/yidongxue/WaitLeisure/releases)
 2. 下载最新的 **`WaitLeisure-x.y.z.apk`**
 3. 在手机上点开这个文件安装
 
