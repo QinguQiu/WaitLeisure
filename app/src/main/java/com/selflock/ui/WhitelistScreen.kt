@@ -109,10 +109,10 @@ fun WhitelistScreen(
             groups.forEach { group ->
                 WhitelistBox(
                     title = group.name,
-                    subtitle = "${group.startMinute.toHhMm()} - ${group.endMinute.toHhMm()} · " +
-                        "${group.packages.size} 个应用" + if (group.enabled) "" else " · 已停用",
+                    // 分组已经不带到生效时段了 —— 什么时候用哪一组由定时规则说了算
+                    subtitle = "${group.packages.size} 个应用",
                     packages = group.packages,
-                    dimmed = !group.enabled,
+                    dimmed = false,
                     onClick = { onOpenGroup(group.id) }
                 )
             }

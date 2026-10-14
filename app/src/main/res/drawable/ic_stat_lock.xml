@@ -1,11 +1,19 @@
 <?xml version="1.0" encoding="utf-8"?>
-<!-- 通知栏小图标：必须是纯白剪影 + 透明背景 -->
+<!--
+  通知栏小图标：必须是纯白剪影 + 透明背景。
+  与桌面图标一致 —— 两个三角形在中心一点相连的沙漏。
+-->
 <vector xmlns:android="http://schemas.android.com/apk/res/android"
     android:width="24dp"
     android:height="24dp"
     android:viewportWidth="24"
     android:viewportHeight="24">
+    <!-- 上半：倒三角 -->
     <path
         android:fillColor="#FFFFFF"
-        android:pathData="M17,9 L17,7 A5,5 0 0 0 7,7 L7,9 A2,2 0 0 0 5,11 L5,19 A2,2 0 0 0 7,21 L17,21 A2,2 0 0 0 19,19 L19,11 A2,2 0 0 0 17,9 Z M9,7 A3,3 0 0 1 15,7 L15,9 L9,9 Z M12,13 A1.75,1.75 0 0 1 12.9,16.2 L13.4,18 L10.6,18 L11.1,16.2 A1.75,1.75 0 0 1 12,13 Z" />
+        android:pathData="M5,3 L19,3 L12,12 Z" />
+    <!-- 下半：正三角，与上半共用顶点 (12,12) -->
+    <path
+        android:fillColor="#FFFFFF"
+        android:pathData="M5,21 L19,21 L12,12 Z" />
 </vector>

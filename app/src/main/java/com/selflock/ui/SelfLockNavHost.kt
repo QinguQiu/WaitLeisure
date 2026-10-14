@@ -29,7 +29,10 @@ import com.selflock.data.Repos
  * 导航图标用 BMP 区字符（\uXXXX 转义），不依赖 material-icons 那个 artifact，
  * 同时保证源码本身保持纯 ASCII，避免任何编码问题。
  */
-private enum class Screen { Home, Whitelist, Schedules, ScheduleEdit, Settings, PermissionEditor, AppPicker }
+private enum class Screen {
+    Home, Whitelist, Schedules, ScheduleEdit, Settings, PermissionEditor, AppPicker,
+    Tasks, TaskEdit
+}
 
 private data class Tab(val screen: Screen, val label: String, val glyph: String)
 
@@ -46,6 +49,8 @@ fun SelfLockNavHost() {
     var editingId by remember { mutableStateOf(-1L) }
     // 应用选择页正在编辑哪个框：PICKER_GLOBAL(-1) = 全局白名单，否则是分组 id
     var pickerGroupId by remember { mutableStateOf(PICKER_GLOBAL) }
+    // 正在编辑哪个任务：-1 = 新建
+    var editingTaskId by remember { mutableStateOf(-1L) }
 
     val showBottomBar = screen == Screen.Home ||
         screen == Screen.Whitelist ||
@@ -57,11 +62,15 @@ fun SelfLockNavHost() {
     BackHandler(
         enabled = screen == Screen.ScheduleEdit ||
             screen == Screen.PermissionEditor ||
-            screen == Screen.AppPicker
+            screen == Screen.AppPicker ||
+            screen == Screen.Tasks ||
+            screen == Screen.TaskEdit
     ) {
         screen = when (screen) {
             Screen.PermissionEditor -> Screen.Home
             Screen.AppPicker -> Screen.Whitelist
+            Screen.TaskEdit -> Screen.Tasks
+            Screen.Tasks -> Screen.Settings
             else -> Screen.Schedules
         }
     }
@@ -99,14 +108,12 @@ fun SelfLockNavHost() {
                     },
                     onNewGroup = {
                         // 先建一个空分组，再直接进它的选择页 ——
-                        // 名称/时段在那一页顶栏的「改名称 / 时段」里填。
+                        // 名称在那一页顶栏的「改名称」里填。
+                        // 分组不再带生效时段了，所以这里也没有时间要初始化。
                         val g = com.selflock.data.WhitelistGroup(
                             id = Repos.groups.nextId(),
                             name = "新分组",
-                            packages = emptySet(),
-                            startMinute = 19 * 60,
-                            endMinute = 22 * 60,
-                            enabled = true
+                            packages = emptySet()
                         )
                         Repos.groups.save(g)
                         pickerGroupId = g.id
@@ -131,7 +138,22 @@ fun SelfLockNavHost() {
                     onDone = { screen = Screen.Schedules }
                 )
 
-                Screen.Settings -> SettingsScreen()
+                Screen.Settings -> SettingsScreen(
+                    onOpenTasks = { screen = Screen.Tasks }
+                )
+
+                Screen.Tasks -> TaskListScreen(
+                    onBack = { screen = Screen.Settings },
+                    onEdit = { id ->
+                        editingTaskId = id
+                        screen = Screen.TaskEdit
+                    }
+                )
+
+                Screen.TaskEdit -> TaskEditScreen(
+                    taskId = editingTaskId,
+                    onDone = { screen = Screen.Tasks }
+                )
             }
         }
     }

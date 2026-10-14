@@ -7,40 +7,28 @@ import org.json.JSONArray
 import org.json.JSONObject
 
 /**
- * 白名单分组：一套应用 + 一个生效时间段。
+ * 白名单分组：**一套应用，不带任何时间限制**。
  *
- * 例如「学习」分组（词典/笔记）在 19:00-22:00 生效，
- * 「娱乐」分组（视频/游戏）在 22:00-23:00 生效。
- * 生效时段内的分组，其应用会被并入「当前可用白名单」。
+ * 为什么把「生效时段」去掉了：早期版本给分组配了时间段，
+ * 但它和定时规则的时间是两套互相打架的语义 —— 用户既要在分组里设时段、
+ * 又要在规则里设时段，同一件事说两遍，还经常对不上。
  *
- * 时间段用「一天里的第几分钟」表示（0-1439），跨午夜时 startMinute > endMinute。
+ * 现在时间只由**定时规则 / 任务**决定：规则选中哪个分组，
+ * 锁机期间就额外放行哪一组应用。全局白名单永远生效。
+ *
+ * 旧数据里的 start/end/enabled 字段会被直接忽略（[fromJson] 不读它们），
+ * 迁移是无损的 —— 只丢掉时间信息，应用集合原样保留。
  */
 data class WhitelistGroup(
     val id: Long,
     val name: String,
-    val packages: Set<String>,
-    val startMinute: Int,
-    val endMinute: Int,
-    val enabled: Boolean = true
+    val packages: Set<String>
 ) {
-
-    fun isActive(minuteOfDay: Int): Boolean {
-        if (!enabled) return false
-        return if (startMinute < endMinute) {
-            minuteOfDay in startMinute until endMinute
-        } else {
-            // 跨午夜：22:00 到次日 06:00
-            minuteOfDay >= startMinute || minuteOfDay < endMinute
-        }
-    }
 
     fun toJson(): JSONObject = JSONObject().apply {
         put("id", id)
         put("name", name)
         put("packages", JSONArray(packages.toList()))
-        put("start", startMinute)
-        put("end", endMinute)
-        put("enabled", enabled)
     }
 
     companion object {
@@ -54,10 +42,7 @@ data class WhitelistGroup(
             return WhitelistGroup(
                 id = o.optLong("id"),
                 name = o.optString("name", "未命名分组"),
-                packages = pkgs,
-                startMinute = o.optInt("start", 0),
-                endMinute = o.optInt("end", 0),
-                enabled = o.optBoolean("enabled", true)
+                packages = pkgs
             )
         }
     }
@@ -70,16 +55,13 @@ class WhitelistGroupRepository(private val prefs: AppPrefs) {
 
     fun current(): List<WhitelistGroup> = _groups.value
 
-    /** 某分钟时刻生效的分组应用合集（不含全局白名单）。 */
-    fun activePackages(minuteOfDay: Int): Set<String> =
-        _groups.value
-            .filter { it.isActive(minuteOfDay) }
-            .flatMapTo(mutableSetOf()) { it.packages }
+    fun byId(id: Long): WhitelistGroup? = _groups.value.firstOrNull { it.id == id }
+
+    /** 某个分组的应用集合；分组不存在就返回空集（而不是抛异常）。 */
+    fun packagesOf(id: Long): Set<String> = byId(id)?.packages ?: emptySet()
 
     fun save(group: WhitelistGroup) {
-        val next = (_groups.value.filter { it.id != group.id } + group)
-            .sortedBy { it.startMinute }
-        update(next)
+        update(_groups.value.filter { it.id != group.id } + group)
     }
 
     fun remove(id: Long) = update(_groups.value.filter { it.id != id })

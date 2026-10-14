@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  英文环境下只覆盖应用名。
+  其余文案暂时沿用默认（中文）—— 界面尚未做完整英文化，
+  但「英文名 WaitLeisure」这条要求在这里落实。
+-->
+<resources>
+    <string name="app_name" translatable="false">WaitLeisure</string>
+</resources>

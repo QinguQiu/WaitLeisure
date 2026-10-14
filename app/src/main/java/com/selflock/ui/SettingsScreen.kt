@@ -66,7 +66,7 @@ import java.io.FileOutputStream
  * 首页只留状态、权限体检和诊断，保持清爽。
  */
 @Composable
-fun SettingsScreen() {
+fun SettingsScreen(onOpenTasks: () -> Unit = {}) {
     val context = LocalContext.current
     var showPinDialog by remember { mutableStateOf(false) }
     var allowPinUnlock by remember { mutableStateOf(Repos.prefs.allowPinUnlock) }
@@ -211,7 +211,7 @@ fun SettingsScreen() {
             subtitle = Pomodoro.describe(Repos.prefs.pomodoroConfig)
         ) {
             Text(
-                text = "按「几组 × 每组多长」轮转：每组结束时休息，若干组后给一次大休息。\n" +
+                text = "按「循环次数 × 专注时长」轮转：每个循环结束时休息，若干循环后给一次长休息。\n" +
                     "专注时段自动锁机，休息时段自动解锁。",
                 fontSize = 12.sp,
                 lineHeight = 17.sp,
@@ -220,10 +220,27 @@ fun SettingsScreen() {
             Spacer(Modifier.height(8.dp))
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 OutlinedButton(onClick = { showPomodoroEdit = true }) { Text("自定义…") }
-                Button(onClick = {
-                    Pomodoro.start(context)
-                }) { Text("开始番茄钟") }
             }
+        }
+
+        GroupHeader(
+            title = "任务",
+            hint = "预设好的锁法，供定时规则引用"
+        )
+
+        SectionCard(
+            title = "任务",
+            subtitle = Repos.tasks.current().size.let { if (it == 0) "还没有任务" else "共 $it 个" }
+        ) {
+            Text(
+                text = "任务是一套预设好的锁法（锁多久 / 番茄钟怎么轮转），**不含时间**。\n" +
+                    "定时规则里选一个任务，就等于「到点执行它」—— 常用锁法只配一次。",
+                fontSize = 12.sp,
+                lineHeight = 17.sp,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+            Spacer(Modifier.height(8.dp))
+            OutlinedButton(onClick = onOpenTasks) { Text("管理任务…") }
         }
 
         Spacer(Modifier.height(8.dp))
@@ -373,14 +390,14 @@ private fun PomodoroConfigDialog(onDismiss: () -> Unit, onSave: (String) -> Unit
                         value = perSet,
                         onValueChange = { perSet = it.filter(Char::isDigit).take(2) },
                         singleLine = true,
-                        label = { Text("大休息间隔（组）") },
+                        label = { Text("几个循环后长休息") },
                         modifier = Modifier.weight(1f)
                     )
                     OutlinedTextField(
                         value = rounds,
                         onValueChange = { rounds = it.filter(Char::isDigit).take(2) },
                         singleLine = true,
-                        label = { Text("共几组") },
+                        label = { Text("循环次数") },
                         modifier = Modifier.weight(1f)
                     )
                 }
@@ -389,7 +406,7 @@ private fun PomodoroConfigDialog(onDismiss: () -> Unit, onSave: (String) -> Unit
                     value = focus,
                     onValueChange = { focus = it.filter(Char::isDigit).take(3) },
                     singleLine = true,
-                    label = { Text("每组专注（分钟）") }
+                    label = { Text("专注时长（分钟）") }
                 )
                 Spacer(Modifier.height(8.dp))
                 Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -397,21 +414,21 @@ private fun PomodoroConfigDialog(onDismiss: () -> Unit, onSave: (String) -> Unit
                         value = short,
                         onValueChange = { short = it.filter(Char::isDigit).take(3) },
                         singleLine = true,
-                        label = { Text("小休息（分）") },
+                        label = { Text("短休息（分钟）") },
                         modifier = Modifier.weight(1f)
                     )
                     OutlinedTextField(
                         value = long,
                         onValueChange = { long = it.filter(Char::isDigit).take(3) },
                         singleLine = true,
-                        label = { Text("大休息（分）") },
+                        label = { Text("长休息（分钟）") },
                         modifier = Modifier.weight(1f)
                     )
                 }
                 Spacer(Modifier.height(10.dp))
                 Text(
-                    text = "例：间隔 2、共 4 组、每组 25、小休 5、大休 15 → " +
-                        "25 专注 → 5 小休 → 25 专注 → 15 大休 → 25 专注 → 5 小休 → 25 专注",
+                    text = "例：循环 4 次、专注 25 分钟、短休 5 分钟、长休 15 分钟、每 2 个循环长休一次 →\n" +
+                        "专注 25 → 短休 5 → 专注 25 → 长休 15 → 专注 25 → 短休 5 → 专注 25 → 结束",
                     fontSize = 11.sp,
                     lineHeight = 16.sp,
                     color = MaterialTheme.colorScheme.onSurfaceVariant

@@ -1,16 +1,17 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <string name="app_name">SelfLock</string>
+    <!-- 中文名「等闲」；英文名 WaitLeisure 在 values-en 里 -->
+    <string name="app_name">等闲</string>
 
     <!-- 无障碍 -->
-    <string name="accessibility_label">SelfLock 锁机服务</string>
+    <string name="accessibility_label">等闲 锁机服务</string>
     <string name="accessibility_summary">锁定期间拦截非白名单应用</string>
-    <string name="accessibility_description">开启后，SelfLock 才能在本机进入锁机状态时识别当前打开的应用，并把你带回锁机页。本服务不读取、不上传任何屏幕内容。</string>
+    <string name="accessibility_description">开启后，等闲才能在本机进入锁机状态时识别当前打开的应用，并把你带回锁机页。本服务不读取、不上传任何屏幕内容。</string>
 
     <!-- 通知 -->
     <string name="notif_channel_locking">锁机状态</string>
     <string name="notif_channel_locking_desc">锁机期间显示常驻通知</string>
-    <string name="notif_locking_title">SelfLock 锁机中</string>
+    <string name="notif_locking_title">等闲 · 锁机中</string>
     <string name="notif_locking_text">仅白名单应用可用 · 点按查看详情</string>
 
     <!-- 锁机页 -->

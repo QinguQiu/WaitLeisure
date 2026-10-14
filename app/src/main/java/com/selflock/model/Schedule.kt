@@ -31,9 +31,15 @@ enum class HolidayMode {
  * 用时长表达更不容易出错，也和主流锁机 App 的心智一致。
  *
  * @param startMinutes    当天 0 点起的分钟数，0..1439
- * @param durationMinutes 锁定时长，1..1440
+ * @param durationMinutes 锁定时长，1..1440。**仅当 [taskId] < 0 时有效**。
  * @param days            生效的星期，取值 1..7 对应 java.time.DayOfWeek（1=周一，7=周日）。
  *                        **空集合 = 单次**：只在下一个该时刻锁一次，锁完自动置为停用。
+ * @param taskId          >= 0 时「执行任务」：锁什么、锁多久都由该任务决定，
+ *                        [durationMinutes] 被忽略。用户要的是「几点执行哪个任务」，
+ *                        不必在每条规则里重配一遍时长。-1 表示本规则自带时长。
+ * @param whitelistGroupId >= 0 时，本次锁机期间额外放行该白名单分组；
+ *                        -1 表示只用全局白名单。分组本身不再带生效时段 ——
+ *                        什么时候用哪一组，由这条规则说了算。
  */
 data class Schedule(
     val id: Long,
@@ -41,8 +47,13 @@ data class Schedule(
     val startMinutes: Int = 23 * 60,
     val durationMinutes: Int = 8 * 60,
     val days: Set<Int> = setOf(1, 2, 3, 4, 5, 6, 7),
-    val holidayMode: HolidayMode = HolidayMode.IGNORE
+    val holidayMode: HolidayMode = HolidayMode.IGNORE,
+    val taskId: Long = -1L,
+    val whitelistGroupId: Long = -1L
 ) {
+    /** 是否走「执行任务」模式。 */
+    val usesTask: Boolean get() = taskId >= 0L
+
     /** 当天 0 点起的结束分钟数（仅用于展示，跨天时小于 startMinutes）。 */
     val endMinutes: Int get() = (startMinutes + durationMinutes) % MINUTES_PER_DAY
 
@@ -51,6 +62,8 @@ data class Schedule(
 
     companion object {
         const val MINUTES_PER_DAY = 24 * 60
+        const val NO_TASK = -1L
+        const val NO_GROUP = -1L
     }
 }
 
@@ -99,10 +112,13 @@ fun Schedule.describeHolidayMode(): String? = when (holidayMode) {
  */
 fun Schedule.activeWindowEndMillis(
     now: Long = System.currentTimeMillis(),
-    zone: ZoneId = ZoneId.systemDefault()
+    zone: ZoneId = ZoneId.systemDefault(),
+    durationOverride: Int? = null
 ): Long? {
     val nowInstant = Instant.ofEpochMilli(now)
     val today = nowInstant.atZone(zone).toLocalDate()
+    // 「执行任务」的规则，时长由任务决定 —— 调用方通过 durationOverride 传进来
+    val minutes = durationOverride ?: durationMinutes
 
     for (offset in longArrayOf(0L, -1L)) {
         val date = today.plusDays(offset)
@@ -112,7 +128,7 @@ fun Schedule.activeWindowEndMillis(
         val start = date.atTime(startMinutes / 60, startMinutes % 60)
             .atZone(zone)
             .toInstant()
-        val end = start.plusSeconds(durationMinutes * 60L)
+        val end = start.plusSeconds(minutes * 60L)
 
         if (!nowInstant.isBefore(start) && nowInstant.isBefore(end)) {
             return end.toEpochMilli()

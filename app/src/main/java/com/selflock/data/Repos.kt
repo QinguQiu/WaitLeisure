@@ -1,7 +1,6 @@
 package com.selflock.data
 
 import android.content.Context
-import java.time.LocalTime
 
 /**
  * 极简服务定位器。
@@ -32,6 +31,9 @@ object Repos {
     lateinit var groups: WhitelistGroupRepository
         private set
 
+    lateinit var tasks: TaskRepository
+        private set
+
     @Synchronized
     fun init(context: Context) {
         if (initialized) return
@@ -42,6 +44,7 @@ object Repos {
         lockState = LockStateRepository(prefs)
         installedApps = InstalledAppsRepository(app)
         groups = WhitelistGroupRepository(prefs)
+        tasks = TaskRepository(prefs)
         initialized = true
     }
 
@@ -50,18 +53,24 @@ object Repos {
         if (!initialized) init(context)
     }
 
-    /** 包名是否在「当前生效的白名单」里：全局白名单 ∪ 当前时段生效的分组。 */
+    /**
+     * 包名是否在「当前生效的白名单」里：全局白名单 ∪ **本次锁定选中的分组**。
+     *
+     * 注意这里不再看时间：分组已经没有生效时段了。
+     * 「现在用哪一组」由锁机时写进 prefs 的 activeWhitelistGroupId 决定 ——
+     * 定时规则触发时带上它的 whitelistGroupId，解锁时清回 -1。
+     */
     fun isWhitelisted(packageName: String): Boolean {
         if (whitelist.contains(packageName)) return true
-        val now = LocalTime.now()
-        val minute = now.hour * 60 + now.minute
-        return groups.activePackages(minute).contains(packageName)
+        val gid = prefs.activeWhitelistGroupId
+        if (gid < 0) return false
+        return groups.packagesOf(gid).contains(packageName)
     }
 
-    /** 当前生效的完整白名单（全局 + 生效分组），给锁机页显示图标用。 */
+    /** 当前生效的完整白名单（全局 + 本次锁定选中的分组），给锁机页显示图标用。 */
     fun effectiveWhitelist(): Set<String> {
-        val now = LocalTime.now()
-        val minute = now.hour * 60 + now.minute
-        return whitelist.current() + groups.activePackages(minute)
+        val gid = prefs.activeWhitelistGroupId
+        if (gid < 0) return whitelist.current()
+        return whitelist.current() + groups.packagesOf(gid)
     }
 }

@@ -78,7 +78,6 @@ fun PermissionScreen(onBack: () -> Unit) {
     val context = LocalContext.current
     var refreshKey by remember { mutableIntStateOf(0) }
     val perms = remember(refreshKey) { PermissionSnapshot.of(context) }
-    val locked by Repos.lockState.locked.collectAsState()
 
     Column(
         modifier = Modifier
@@ -194,28 +193,8 @@ fun PermissionScreen(onBack: () -> Unit) {
             }
         }
 
-        SectionCard(
-            title = "诊断日志",
-            subtitle = "服务" + (if (LockAccessibilityService.isConnected()) "已连接" else "未连接") +
-                " · 窗口事件 " + LockAccessibilityService.receivedEventCount() + " 次" +
-                " · 当前" + (if (locked) "已锁定" else "未锁定")
-        ) {
-            val lines = remember(refreshKey) { DiagLog.snapshot() }.asReversed()
-            if (lines.isEmpty()) {
-                Text(
-                    text = "还没有记录。开启无障碍并锁机后，这里会显示每一个窗口切换事件。",
-                    fontSize = 11.sp,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                )
-            } else {
-                Text(
-                    text = lines.joinToString("\n"),
-                    fontSize = 11.sp,
-                    lineHeight = 16.sp,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                )
-            }
-        }
+        // 诊断日志刻意**不在这里**重复一份 —— 首页已经有一张卡片了。
+        // 「加固权限」页只负责系统权限，日志属于排查工具，放首页更顺手。
 
         Spacer(Modifier.height(8.dp))
     }

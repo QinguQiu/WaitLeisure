@@ -68,10 +68,36 @@ class AppPrefs(context: Context) {
         get() = sp.getString(KEY_GROUPS, "[]") ?: "[]"
         set(value) = sp.edit().putString(KEY_GROUPS, value).apply()
 
-    /** 番茄钟配置：共几组,每组分钟,小休息,大休息,几组后大休息。 */
+    /** 任务（预设锁法）：JSON 数组。空字符串表示「还没播种过」。 */
+    var tasksJson: String
+        get() = sp.getString(KEY_TASKS, "") ?: ""
+        set(value) = sp.edit().putString(KEY_TASKS, value).apply()
+
+    /**
+     * 当前锁定期间额外放行的白名单分组；-1 表示只用全局白名单。
+     *
+     * 分组本身不再带生效时段，所以「现在用哪一组」必须由锁机时记下来 ——
+     * 定时规则触发时把它的 whitelistGroupId 写进来，解锁时清回 -1。
+     */
+    var activeWhitelistGroupId: Long
+        get() = sp.getLong(KEY_ACTIVE_GROUP, -1L)
+        set(value) = sp.edit().putLong(KEY_ACTIVE_GROUP, value).apply()
+
+    /** 番茄钟配置：循环次数,专注分钟,短休息,长休息,几个循环后长休息。 */
     var pomodoroConfig: String
         get() = sp.getString(KEY_POMODORO_CONFIG, DEFAULT_POMODORO) ?: DEFAULT_POMODORO
         set(value) = sp.edit().putString(KEY_POMODORO_CONFIG, value).apply()
+
+    /**
+     * **本次运行**的番茄钟配置；空字符串表示「用用户设置页里那份」。
+     *
+     * 为什么单独存一份：「执行任务」时任务自带配置，如果直接写进 [pomodoroConfig]，
+     * 用户跑一次定时的番茄钟任务，自己手配的参数就被悄悄改掉了。
+     * 运行期用这一份，运行结束清空，用户那份始终不动。
+     */
+    var pomodoroRunConfig: String
+        get() = sp.getString(KEY_POMODORO_RUN_CONFIG, "") ?: ""
+        set(value) = sp.edit().putString(KEY_POMODORO_RUN_CONFIG, value).apply()
 
     /**
      * 番茄钟运行状态。空串 = 未运行；否则为 "组序号,相位,相位结束时刻"，
@@ -109,7 +135,10 @@ class AppPrefs(context: Context) {
         const val KEY_WALLPAPER_COLOR = "wallpaper_color"
         const val KEY_WALLPAPER_IMAGE = "wallpaper_image"
         const val KEY_GROUPS = "whitelist_groups"
+    const val KEY_TASKS = "tasks"
+    const val KEY_ACTIVE_GROUP = "active_whitelist_group"
         const val KEY_POMODORO_CONFIG = "pomodoro_config"
+    const val KEY_POMODORO_RUN_CONFIG = "pomodoro_run_config"
         const val KEY_POMODORO_STATE = "pomodoro_state"
         const val KEY_WHITELIST_GRID = "whitelist_grid"
         const val KEY_HOLIDAY_DISMISSED_YEAR = "holiday_dismissed_year"

@@ -24,6 +24,7 @@ import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
+import androidx.compose.material3.RadioButton
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
@@ -31,6 +32,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.mutableLongStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
@@ -42,12 +44,13 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.selflock.R
 import com.selflock.alarm.AlarmScheduler
+import com.selflock.alarm.ScheduleRunner
 import com.selflock.data.Repos
-import com.selflock.lock.LockController
 import com.selflock.model.DAY_LABELS
 import com.selflock.model.HolidayCalendar
 import com.selflock.model.HolidayMode
 import com.selflock.model.Schedule
+import com.selflock.model.TaskKind
 import com.selflock.model.activeWindowEndMillis
 import com.selflock.model.describeDays
 import com.selflock.model.describeHolidayMode
@@ -227,6 +230,15 @@ fun ScheduleEditScreen(scheduleId: Long, onDone: () -> Unit) {
     var days by remember { mutableStateOf(existing?.days ?: setOf(1, 2, 3, 4, 5, 6, 7)) }
     var holidayMode by remember { mutableStateOf(existing?.holidayMode ?: HolidayMode.IGNORE) }
 
+    // 「执行任务」模式：锁什么由任务决定，本页不再设时长
+    val tasks = remember { Repos.tasks.current() }
+    var useTask by remember { mutableStateOf(existing?.usesTask ?: false) }
+    var taskId by remember { mutableLongStateOf(existing?.taskId ?: (tasks.firstOrNull()?.id ?: -1L)) }
+
+    // 本次锁机额外放行哪个白名单分组；-1 = 只用全局
+    val groups = remember { Repos.groups.current() }
+    var groupId by remember { mutableLongStateOf(existing?.whitelistGroupId ?: Schedule.NO_GROUP) }
+
     Column(
         modifier = Modifier
             .fillMaxSize()
@@ -251,24 +263,120 @@ fun ScheduleEditScreen(scheduleId: Long, onDone: () -> Unit) {
             )
         }
 
-        SectionCard(title = "持续时长", subtitle = durationMinutes.toDurationText()) {
-            DurationPicker(
-                totalMinutes = durationMinutes,
-                maxMinutes = MAX_DURATION_MINUTES,
-                onSelect = { durationMinutes = it }
-            )
-            Spacer(Modifier.height(8.dp))
+        // 「锁多久」有两种给法：本规则自己设，或者交给一个现成的任务。
+        // 用任务的好处是常用锁法只配一次、多条规则复用。
+        SectionCard(
+            title = "锁什么",
+            subtitle = if (useTask) "执行任务" else "本规则自带时长"
+        ) {
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                FilterChip(
+                    selected = !useTask,
+                    onClick = { useTask = false },
+                    label = { Text("设定时长") }
+                )
+                FilterChip(
+                    selected = useTask,
+                    onClick = {
+                        // 一个任务都没有时不要切过去 —— 否则会卡在一个没有选项的空页面
+                        if (tasks.isNotEmpty()) useTask = true
+                    },
+                    label = { Text("执行任务") }
+                )
+            }
+
+            if (useTask) {
+                Spacer(Modifier.height(10.dp))
+                if (tasks.isEmpty()) {
+                    Text(
+                        text = "还没有任务。去「设置 → 任务」里新建，或直接改用「设定时长」。",
+                        fontSize = 12.sp,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                } else {
+                    tasks.forEach { t ->
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .clickable { taskId = t.id }
+                                .padding(vertical = 4.dp)
+                        ) {
+                            RadioButton(
+                                selected = taskId == t.id,
+                                onClick = { taskId = t.id }
+                            )
+                            Spacer(Modifier.width(4.dp))
+                            Column {
+                                Text(t.name, fontSize = 13.sp)
+                                Text(
+                                    text = t.describe(),
+                                    fontSize = 11.sp,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                                )
+                            }
+                        }
+                    }
+                    Spacer(Modifier.height(6.dp))
+                    Text(
+                        text = "任务里只有锁法、不含时间 —— 什么时候执行由上面的「起始时间」决定。",
+                        fontSize = 11.sp,
+                        lineHeight = 16.sp,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
+            } else {
+                Spacer(Modifier.height(10.dp))
+                DurationPicker(
+                    totalMinutes = durationMinutes,
+                    maxMinutes = MAX_DURATION_MINUTES,
+                    onSelect = { durationMinutes = it }
+                )
+                Spacer(Modifier.height(8.dp))
+                Row(
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    modifier = Modifier.horizontalScroll(rememberScrollState())
+                ) {
+                    DURATION_PRESETS.forEach { preset ->
+                        AssistChip(
+                            onClick = { durationMinutes = preset },
+                            label = { Text(preset.toDurationText()) }
+                        )
+                    }
+                }
+            }
+        }
+
+        // 分组不再自带生效时段，「什么时候用哪一组」在这里说清楚
+        SectionCard(
+            title = "白名单",
+            subtitle = if (groupId < 0) "只用全局白名单" else "额外放行一个分组"
+        ) {
             Row(
                 horizontalArrangement = Arrangement.spacedBy(8.dp),
                 modifier = Modifier.horizontalScroll(rememberScrollState())
             ) {
-                DURATION_PRESETS.forEach { preset ->
-                    AssistChip(
-                        onClick = { durationMinutes = preset },
-                        label = { Text(preset.toDurationText()) }
+                FilterChip(
+                    selected = groupId < 0,
+                    onClick = { groupId = Schedule.NO_GROUP },
+                    label = { Text("全局") }
+                )
+                groups.forEach { g ->
+                    FilterChip(
+                        selected = groupId == g.id,
+                        onClick = { groupId = g.id },
+                        label = { Text(g.name) }
                     )
                 }
             }
+            Spacer(Modifier.height(8.dp))
+            Text(
+                text = "全局白名单永远生效。选中某个分组时，本次锁机**额外**放行那一组应用；" +
+                    "分组只是「一套应用」，不带时间限制。",
+                fontSize = 11.sp,
+                lineHeight = 16.sp,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
         }
 
         SectionCard(title = "重复", subtitle = days.describeDays()) {
@@ -355,18 +463,29 @@ fun ScheduleEditScreen(scheduleId: Long, onDone: () -> Unit) {
         }
 
         SectionCard(title = "生效结果", subtitle = null) {
-            val end = (startMinutes + durationMinutes) % Schedule.MINUTES_PER_DAY
+            val selectedTask = if (useTask) tasks.firstOrNull { it.id == taskId } else null
+            // 简单锁机任务才有确定时长；番茄钟按相位轮转，给不出单一结束时刻
+            val effective = selectedTask?.takeIf { it.kind == TaskKind.SIMPLE_LOCK }?.durationMinutes
+                ?: durationMinutes
+            val end = (startMinutes + effective) % Schedule.MINUTES_PER_DAY
+
             Text(
                 text = buildString {
                     append(startMinutes.toHhMm())
-                    append(" 开始锁定，")
-                    append(if (startMinutes + durationMinutes > Schedule.MINUTES_PER_DAY) "次日 " else "当天 ")
-                    append(end.toHhMm())
-                    append(" 自动解除。\n")
+                    if (selectedTask?.kind == TaskKind.POMODORO) {
+                        append(" 开始番茄钟：")
+                        append(selectedTask.describe())
+                        append("，按相位自动轮转。\n")
+                    } else {
+                        append(" 开始锁定，")
+                        append(if (startMinutes + effective > Schedule.MINUTES_PER_DAY) "次日 " else "当天 ")
+                        append(end.toHhMm())
+                        append(" 自动解除。\n")
+                    }
                     if (days.isEmpty()) {
                         append("单次：下一个 ")
                         append(startMinutes.toHhMm())
-                        append(" 锁一次，之后自动停用。")
+                        append(" 执行一次，之后自动停用。")
                     } else {
                         append("生效于：")
                         append(days.describeDays())
@@ -381,6 +500,10 @@ fun ScheduleEditScreen(scheduleId: Long, onDone: () -> Unit) {
                             )
                             append("）")
                         }
+                    }
+                    if (groupId >= 0) {
+                        append("\n额外放行分组：")
+                        append(groups.firstOrNull { it.id == groupId }?.name ?: "（已删除）")
                     }
                 },
                 fontSize = 13.sp,
@@ -398,7 +521,10 @@ fun ScheduleEditScreen(scheduleId: Long, onDone: () -> Unit) {
                         durationMinutes = durationMinutes,
                         days = days,
                         holidayMode = holidayMode,
-                        enabled = true
+                        enabled = true,
+                        // 不用任务时写回 -1，避免上次的任务残留下来
+                        taskId = if (useTask && taskId >= 0) taskId else Schedule.NO_TASK,
+                        whitelistGroupId = groupId
                     )
                     persistSchedule(context, saved)
                     onDone()
@@ -432,11 +558,20 @@ private fun persistSchedule(context: Context, schedule: Schedule) {
     // 关键补漏：如果**此刻已经落在生效窗口里**，光排「下一次开始」是不够的 ——
     // 14:00 才建一条 13:00 开始、持续 2 小时的规则时，下一次开始是明天 13:00，
     // 今天这段还在进行的窗口会被整个跳过（实测踩到）。
-    // 这时立刻锁上，并只锁到窗口结束。
-    val windowEnd = schedule.activeWindowEndMillis()
+    // 这时立刻执行，并只锁到窗口结束。
+    //
+    // 走 ScheduleRunner 而不是直接 LockController.lock —— 规则可能是「执行任务」，
+    // 时长得由任务决定，两处各写一份迟早走歪。
+    val task = if (schedule.usesTask) Repos.tasks.byId(schedule.taskId) else null
+    val windowMinutes = task?.takeIf { it.kind == TaskKind.SIMPLE_LOCK }?.durationMinutes
+        ?: schedule.durationMinutes
+
+    val windowEnd = schedule.activeWindowEndMillis(durationOverride = windowMinutes)
     if (windowEnd != null) {
-        LockController.lock(context, windowEnd, schedule.id)
-        AlarmScheduler.scheduleEnd(context, windowEnd, schedule.id)
+        val endAt = ScheduleRunner.execute(context, schedule)
+        if (endAt != null) {
+            AlarmScheduler.scheduleEnd(context, endAt, schedule.id)
+        }
     }
 }
 

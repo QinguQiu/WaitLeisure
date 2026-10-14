@@ -29,10 +29,14 @@ class ScheduleAlarmReceiver : BroadcastReceiver() {
         val schedule = Repos.schedules.byId(scheduleId)
 
         if (schedule != null && schedule.enabled) {
-            val endAt = System.currentTimeMillis() + schedule.durationMinutes * 60_000L
-            LockController.lock(context, endAt, schedule.id)
-            // 本次锁定的结束闹钟必须排上
-            AlarmScheduler.scheduleEnd(context, endAt, schedule.id)
+            // 锁什么由 ScheduleRunner 决定：可能是自带时长，也可能是执行某个任务
+            val endAt = ScheduleRunner.execute(context, schedule)
+
+            if (endAt != null) {
+                // 本次锁定的结束闹钟必须排上。
+                // 番茄钟任务返回 null —— 它的相位由 Pomodoro 自己推进，不排单一结束闹钟。
+                AlarmScheduler.scheduleEnd(context, endAt, schedule.id)
+            }
 
             if (schedule.days.isEmpty()) {
                 // 单次：触发一次就消耗掉 —— 置为停用，列表里随之变灰。

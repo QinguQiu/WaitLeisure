@@ -124,9 +124,9 @@ fun AppPickerScreen(groupId: Long, onBack: () -> Unit) {
                 )
                 Text(
                     text = if (group == null) {
-                        "任何时段都可用 · 已选 ${selected.size} 个"
+                        "全局白名单 · 任何时段都可用 · 已选 ${selected.size} 个"
                     } else {
-                        "${group.startMinute.toHhMm()} - ${group.endMinute.toHhMm()} · 已选 ${selected.size} 个"
+                        "分组「${group.name}」· 已选 ${selected.size} 个"
                     },
                     fontSize = 11.sp,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
@@ -288,7 +288,12 @@ fun parseHhMm(s: String): Int? {
     return h * 60 + m
 }
 
-/** 只改分组的名称和生效时段（应用集合在本页勾选）。 */
+/**
+ * 只改分组的名称（应用集合在本页勾选）。
+ *
+ * 生效时段那一栏已经删掉：分组不再带时间限制，
+ * 「什么时候用哪一组」由定时规则里的白名单选项决定。
+ */
 @Composable
 private fun GroupInfoDialog(
     group: WhitelistGroup,
@@ -296,8 +301,6 @@ private fun GroupInfoDialog(
     onSave: (WhitelistGroup) -> Unit
 ) {
     var name by remember { mutableStateOf(group.name) }
-    var start by remember { mutableStateOf(group.startMinute.toHhMm()) }
-    var end by remember { mutableStateOf(group.endMinute.toHhMm()) }
 
     AlertDialog(
         onDismissRequest = onDismiss,
@@ -311,40 +314,19 @@ private fun GroupInfoDialog(
                     label = { Text("分组名") }
                 )
                 Spacer(Modifier.height(8.dp))
-                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    OutlinedTextField(
-                        value = start,
-                        onValueChange = { start = it },
-                        singleLine = true,
-                        label = { Text("开始 HH:mm") },
-                        modifier = Modifier.weight(1f)
-                    )
-                    OutlinedTextField(
-                        value = end,
-                        onValueChange = { end = it },
-                        singleLine = true,
-                        label = { Text("结束 HH:mm") },
-                        modifier = Modifier.weight(1f)
-                    )
-                }
-                Spacer(Modifier.height(6.dp))
                 Text(
-                    text = "跨午夜直接写，例如 22:00 - 06:00。",
+                    text = "分组只是一套应用，不带时间限制。\n" +
+                        "想让它在某个时段生效，去「定时」里新建规则并选上这个分组。",
                     fontSize = 11.sp,
+                    lineHeight = 16.sp,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
             }
         },
         confirmButton = {
             TextButton(
-                enabled = name.isNotBlank() &&
-                    parseHhMm(start) != null &&
-                    parseHhMm(end) != null,
-                onClick = {
-                    val s = parseHhMm(start) ?: return@TextButton
-                    val e = parseHhMm(end) ?: return@TextButton
-                    onSave(group.copy(name = name.trim(), startMinute = s, endMinute = e))
-                }
+                enabled = name.isNotBlank(),
+                onClick = { onSave(group.copy(name = name.trim())) }
             ) { Text("保存") }
         },
         dismissButton = { TextButton(onClick = onDismiss) { Text("取消") } }

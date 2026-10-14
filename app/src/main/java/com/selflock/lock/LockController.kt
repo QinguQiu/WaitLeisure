@@ -14,8 +14,17 @@ import com.selflock.util.Permissions
  */
 object LockController {
 
-    /** 开始锁定。untilMillis <= 0 表示无限期锁定（只能靠 PIN 解除）。 */
-    fun lock(context: Context, untilMillis: Long, scheduleId: Long = -1L) {
+    /**
+     * 开始锁定。untilMillis <= 0 表示无限期锁定（只能靠 PIN 解除）。
+     *
+     * @param whitelistGroupId >= 0 时本次锁机额外放行该分组；-1 表示只用全局白名单。
+     */
+    fun lock(
+        context: Context,
+        untilMillis: Long,
+        scheduleId: Long = -1L,
+        whitelistGroupId: Long = -1L
+    ) {
         Repos.ensure(context)
 
         // 无障碍服务没在跑时不做任何锁机动作。
@@ -31,6 +40,10 @@ object LockController {
             return
         }
 
+        // 分组本身不带生效时段了，「这次用哪一组」只能在这里记下来。
+        // 必须写在启动服务之前 —— 服务一起来就会开始判白名单。
+        Repos.prefs.activeWhitelistGroupId = whitelistGroupId
+
         Repos.lockState.lockUntil(untilMillis, scheduleId)
         startService(context)
         // 悬浮窗优先：锁机界面就是它，秒显、常驻、不经过 Activity 启动，MIUI 拦不住。
@@ -43,6 +56,8 @@ object LockController {
     fun unlock(context: Context) {
         Repos.ensure(context)
         Repos.lockState.unlock()
+        // 解锁就回到「只用全局白名单」。下次锁机时再由调用方重新指定分组。
+        Repos.prefs.activeWhitelistGroupId = -1L
         stopService(context)
     }
 

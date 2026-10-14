@@ -28,6 +28,7 @@ import androidx.compose.material3.Button
 import androidx.compose.material3.Checkbox
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.ui.res.stringResource
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Switch
@@ -58,6 +59,7 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.selflock.alarm.AlarmScheduler
+import com.selflock.R
 import com.selflock.data.Repos
 import com.selflock.data.WhitelistGroup
 import com.selflock.model.HolidayCalendar
@@ -66,6 +68,7 @@ import com.selflock.util.DiagLog
 import com.selflock.lock.LockAccessibilityService
 import com.selflock.lock.LockController
 import com.selflock.lock.LockScreenActivity
+import com.selflock.lock.Pomodoro
 import com.selflock.model.Schedule
 import com.selflock.model.describeDays
 import com.selflock.model.toDurationText
@@ -95,6 +98,8 @@ fun HomeScreen(onOpenPermissions: () -> Unit) {
     // 配合 SelfLockNavHost 的 when 切换 —— 每次回到首页都会重新进入组合，效果等价。
     var refreshKey by remember { mutableIntStateOf(0) }
     var copied by remember { mutableStateOf(false) }
+    // 番茄钟状态存在 prefs 里而不是 StateFlow，所以靠 refreshKey 驱动重算
+    val pomodoroActive = remember(refreshKey) { Pomodoro.isActive() }
     LaunchedEffect(Unit) {
         Repos.lockState.refresh()
     }
@@ -147,7 +152,7 @@ fun HomeScreen(onOpenPermissions: () -> Unit) {
             verticalAlignment = Alignment.CenterVertically
         ) {
             Text(
-                text = "SelfLock",
+                text = stringResource(R.string.app_name),
                 fontSize = 17.sp,
                 fontWeight = FontWeight.SemiBold
             )
@@ -175,7 +180,11 @@ fun HomeScreen(onOpenPermissions: () -> Unit) {
             scheduleCount = schedules.count { it.enabled },
             whitelistCount = whitelist.size,
             nextTrigger = nextTriggerText(schedules),
+            pomodoroText = Pomodoro.describe(Repos.prefs.pomodoroConfig),
+            pomodoroActive = pomodoroActive,
             onLockNow = { showLockNowDialog = true },
+            onStartPomodoro = { Pomodoro.start(context); refreshKey++ },
+            onStopPomodoro = { Pomodoro.stop(context); refreshKey++ },
             onOpenLockScreen = { LockScreenActivity.show(context) }
         )
 
@@ -256,7 +265,7 @@ fun HomeScreen(onOpenPermissions: () -> Unit) {
                     onClick = {
                         val dump = DiagLog.snapshot().joinToString("\n")
                         val cm = context.getSystemService(ClipboardManager::class.java)
-                        cm?.setPrimaryClip(ClipData.newPlainText("SelfLock 诊断日志", dump))
+                        cm?.setPrimaryClip(ClipData.newPlainText("等闲 诊断日志", dump))
                         copied = true
                     }
                 ) { Text(if (copied) "已复制 ✓" else "复制全部") }
@@ -415,7 +424,11 @@ private fun StatusCard(
     scheduleCount: Int,
     whitelistCount: Int,
     nextTrigger: String,
+    pomodoroText: String,
+    pomodoroActive: Boolean,
     onLockNow: () -> Unit,
+    onStartPomodoro: () -> Unit,
+    onStopPomodoro: () -> Unit,
     onOpenLockScreen: () -> Unit
 ) {
     SectionCard(
@@ -433,9 +446,30 @@ private fun StatusCard(
                 Text("回到锁机页")
             }
         } else {
-            Button(onClick = onLockNow, modifier = Modifier.fillMaxWidth()) {
-                Text("立即锁机")
+            // 两种锁法并排：左边是直接锁一段时间，右边是按番茄钟节奏轮转。
+            // 番茄钟原来藏在设置页里，等于没有入口 —— 挪到首页。
+            Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                Button(
+                    onClick = onLockNow,
+                    modifier = Modifier.weight(1f)
+                ) {
+                    Text("简单锁机")
+                }
+                OutlinedButton(
+                    onClick = if (pomodoroActive) onStopPomodoro else onStartPomodoro,
+                    modifier = Modifier.weight(1f)
+                ) {
+                    Text(if (pomodoroActive) "停止番茄钟" else "番茄钟")
+                }
             }
+            Spacer(Modifier.height(8.dp))
+            Text(
+                text = if (pomodoroActive) "番茄钟进行中 · $pomodoroText"
+                else "番茄钟：$pomodoroText",
+                fontSize = 11.sp,
+                lineHeight = 15.sp,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
         }
     }
 }

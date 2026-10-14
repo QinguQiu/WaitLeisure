@@ -56,6 +56,8 @@ class ScheduleRepository(private val prefs: AppPrefs) {
                     put("durationMinutes", s.durationMinutes)
                     put("days", JSONArray(s.days.sorted()))
                     put("holidayMode", s.holidayMode.name)
+                    put("taskId", s.taskId)
+                    put("whitelistGroupId", s.whitelistGroupId)
                 }
             )
         }
@@ -78,7 +80,11 @@ class ScheduleRepository(private val prefs: AppPrefs) {
             // 老数据没有这个字段，默认 IGNORE —— 保持和升级前完全一致的行为
             holidayMode = runCatching {
                 HolidayMode.valueOf(json.optString("holidayMode", HolidayMode.IGNORE.name))
-            }.getOrDefault(HolidayMode.IGNORE)
+            }.getOrDefault(HolidayMode.IGNORE),
+            // 老数据同样没有这两个字段 —— 默认「自带时长、只用全局白名单」，
+            // 也就是升级前后行为完全一致
+            taskId = json.optLong("taskId", Schedule.NO_TASK),
+            whitelistGroupId = json.optLong("whitelistGroupId", Schedule.NO_GROUP)
         )
     }
 }
