@@ -68,17 +68,26 @@ jobs:
           # tr -d 去掉可能粘贴进来的换行/空格；base64 中间本来也不该有空白
           printf '%s' "$KEYSTORE_B64" | tr -d '[:space:]' | base64 -d > "$HOME/.android/waitleisure-release.jks"
           KS="$HOME/.android/waitleisure-release.jks"
-          echo "keystore: $(stat -c%s "$KS") bytes, sha256=$(sha256sum "$KS" | cut -c1-16)"
+          SIZE=$(stat -c%s "$KS")
+          SHA=$(sha256sum "$KS" | cut -c1-16)
+          echo "keystore: ${SIZE} bytes, sha256=$SHA"
 
-          # 就地验一次口令 —— 口令错的话在**这一步**就报出来，
-          # 而不是等到 packaging 阶段崩成一句「Build release APK 失败」。
-          keytool -list -keystore "$KS" -storepass "$STORE_PASSWORD" -alias "$KEY_ALIAS" >/dev/null 2>&1 || {
-            echo "::error::keystore 打不开 —— 多半是 RELEASE_KEYSTORE_PASSWORD / RELEASE_KEY_ALIAS 值不对"
-            echo "(Secret 从网页粘贴时经常带上尾随换行或空格，build.gradle.kts 里已做 trim，"
-            echo " 所以这里更可能是口令本身打错了，或者 alias 不是 waitleisure)"
+          # 就地验口令。失败时把**关键事实写进 ::error::** ——
+          # 普通 echo 只能去网页看日志，而 ::error:: 会变成 check-run 注解，
+          # 用 API 就能读到，排查不用来回问人。
+          INFO="size=${SIZE} sha256=${SHA} pwd_len=${#STORE_PASSWORD} alias=[${KEY_ALIAS}] b64_len=${#KEYSTORE_B64}"
+
+          if keytool -list -keystore "$KS" -storepass "$STORE_PASSWORD" -alias "$KEY_ALIAS" >/dev/null 2>&1; then
+            echo "keystore 口令与 alias 校验通过（$INFO）"
+          elif keytool -list -keystore "$KS" -storepass "$STORE_PASSWORD" >/dev/null 2>&1; then
+            # 口令没问题，那问题就在 alias 上
+            REAL=$(keytool -list -keystore "$KS" -storepass "$STORE_PASSWORD" 2>/dev/null | grep -i 'PrivateKeyEntry' | head -1 | sed 's/,.*//')
+            echo "::error::keystore 口令正确，但 alias 不对。$INFO 实际 alias=[${REAL}]"
             exit 1
-          }
-          echo "keystore 口令校验通过"
+          else
+            echo "::error::keystore 口令不对（或文件解码后已损坏）。$INFO 期望 size=2770"
+            exit 1
+          fi
 
       - name: Build release APK
         env:
