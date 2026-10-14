@@ -34,6 +34,7 @@ import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
@@ -71,6 +72,8 @@ import com.selflock.model.toDurationText
 import com.selflock.model.toHhMm
 import com.selflock.util.Permissions
 import com.selflock.util.Pin
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.LifecycleEventObserver
 import com.selflock.model.AppInfo
 import java.io.File
 import java.io.FileOutputStream
@@ -94,6 +97,22 @@ fun HomeScreen(onOpenPermissions: () -> Unit) {
     var copied by remember { mutableStateOf(false) }
     LaunchedEffect(Unit) {
         Repos.lockState.refresh()
+    }
+
+    // 从系统设置授权完回到 App 时必须立刻重算。
+    //
+    // 光靠「切 tab 重新进入组合」不够：退到后台再回来**不会**重建组合，
+    // 首页会一直显示旧结果 —— 实测手动去设置里开完无障碍再回来，
+    // 首页还写着「无障碍服务未运行」，看起来就像白开了。
+    // 这里监听 ON_RESUME（进入前台）主动刷新。
+    @Suppress("DEPRECATION")
+    val lifecycleOwner = androidx.compose.ui.platform.LocalLifecycleOwner.current
+    DisposableEffect(lifecycleOwner) {
+        val observer = LifecycleEventObserver { _, event ->
+            if (event == Lifecycle.Event.ON_RESUME) refreshKey++
+        }
+        lifecycleOwner.lifecycle.addObserver(observer)
+        onDispose { lifecycleOwner.lifecycle.removeObserver(observer) }
     }
 
     val perms = remember(refreshKey) { PermissionSnapshot.of(context) }
