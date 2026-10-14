@@ -98,7 +98,7 @@ jobs:
             echo "> 这是一个全新的 App，旧的 SelfLock 不会自动升级/卸载，请手动卸载；"
             echo "> 旧的配置（白名单、定时规则、分组、任务）也不会带过来，需要重配一次。"
             echo
-            echo "首次使用请按 README 第四节完成权限授权。"
+            echo "首次使用请照 README「第一次使用：照这个顺序做」一节把权限配齐。"
             echo "小米 / 红米（HyperOS）特别注意 **「后台弹出界面」**，不授权锁机页拉不起来。"
           } > RELEASE_NOTES.md
           cat RELEASE_NOTES.md
