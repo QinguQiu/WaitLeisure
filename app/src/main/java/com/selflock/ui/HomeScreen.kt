@@ -389,7 +389,8 @@ private fun StatusCard(
 private fun nextTriggerText(schedules: List<Schedule>): String {
     val now = LocalDateTime.now()
     val next = schedules
-        .filter { it.enabled && it.days.isNotEmpty() }
+        // 不再要求 days 非空 —— 空集合现在是「单次」，同样是一条会触发的规则
+        .filter { it.enabled }
         .mapNotNull { s ->
             AlarmScheduler.nextTriggerMillis(s, now)?.let { millis -> millis to s }
         }

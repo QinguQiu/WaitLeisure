@@ -135,12 +135,28 @@ private fun ScheduleCard(
     onClick: () -> Unit,
     onDelete: () -> Unit
 ) {
+    // 停用的规则整体变灰。
+    // 单次规则触发一次后会被自动置为停用，走到这个状态 ——
+    // 变灰让「这条已经用过了」一眼可见，把开关重新打开即可再次激活触发。
+    val dim = !schedule.enabled
+    val titleColor = if (dim) {
+        MaterialTheme.colorScheme.onSurfaceVariant
+    } else {
+        MaterialTheme.colorScheme.onSurface
+    }
+
     Card(
         modifier = Modifier
             .fillMaxWidth()
             .clickable(onClick = onClick),
-        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
-        elevation = CardDefaults.cardElevation(defaultElevation = 1.dp)
+        colors = CardDefaults.cardColors(
+            containerColor = if (dim) {
+                MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.45f)
+            } else {
+                MaterialTheme.colorScheme.surface
+            }
+        ),
+        elevation = CardDefaults.cardElevation(defaultElevation = if (dim) 0.dp else 1.dp)
     ) {
         Row(
             modifier = Modifier.padding(horizontal = 16.dp, vertical = 14.dp),
@@ -151,7 +167,8 @@ private fun ScheduleCard(
                     Text(
                         text = schedule.startMinutes.toHhMm(),
                         fontSize = 24.sp,
-                        fontWeight = FontWeight.Medium
+                        fontWeight = FontWeight.Medium,
+                        color = titleColor
                     )
                     Spacer(Modifier.width(8.dp))
                     Text(
@@ -198,7 +215,6 @@ fun ScheduleEditScreen(scheduleId: Long, onDone: () -> Unit) {
     var startMinutes by remember { mutableIntStateOf(existing?.startMinutes ?: (23 * 60)) }
     var durationMinutes by remember { mutableIntStateOf(existing?.durationMinutes ?: (8 * 60)) }
     var days by remember { mutableStateOf(existing?.days ?: setOf(1, 2, 3, 4, 5, 6, 7)) }
-    var showTimePicker by remember { mutableStateOf(false) }
 
     Column(
         modifier = Modifier
@@ -213,10 +229,15 @@ fun ScheduleEditScreen(scheduleId: Long, onDone: () -> Unit) {
             fontWeight = FontWeight.Bold
         )
 
-        SectionCard(title = "起始时间", subtitle = "每天到这个点自动锁定") {
-            OutlinedButton(onClick = { showTimePicker = true }) {
-                Text(startMinutes.toHhMm(), fontSize = 22.sp)
-            }
+        SectionCard(title = "起始时间", subtitle = startMinutes.toHhMm()) {
+            // 用和「立即锁机」同一个 DurationPicker：两列数字，精确到 1 分钟。
+            // 之前这里是 FilterChip 拼的小时 + 5 分钟一档的分钟，选不到 :57 这种时刻。
+            DurationPicker(
+                totalMinutes = startMinutes,
+                maxMinutes = Schedule.MINUTES_PER_DAY - 1,
+                minMinutes = 0,
+                onSelect = { startMinutes = it }
+            )
         }
 
         SectionCard(title = "持续时长", subtitle = durationMinutes.toDurationText()) {
@@ -254,9 +275,25 @@ fun ScheduleEditScreen(scheduleId: Long, onDone: () -> Unit) {
             }
             Spacer(Modifier.height(4.dp))
             Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
-                TextButton(onClick = { days = setOf(1, 2, 3, 4, 5, 6, 7) }) { Text("每天") }
+                // 「每天」是个开关：全选中时再点一次就全部取消 = 单次
+                TextButton(onClick = {
+                    days = if (days.size == 7) emptySet() else setOf(1, 2, 3, 4, 5, 6, 7)
+                }) {
+                    Text(if (days.size == 7) "每天 ✓" else "每天")
+                }
                 TextButton(onClick = { days = setOf(1, 2, 3, 4, 5) }) { Text("工作日") }
                 TextButton(onClick = { days = setOf(6, 7) }) { Text("周末") }
+                TextButton(onClick = { days = emptySet() }) { Text("只锁一次") }
+            }
+            if (days.isEmpty()) {
+                Spacer(Modifier.height(4.dp))
+                Text(
+                    text = "单次：只在下一个 ${startMinutes.toHhMm()} 锁一次，" +
+                        "锁完自动停用（列表里变灰，开关重新打开即可再次触发）",
+                    fontSize = 11.sp,
+                    lineHeight = 16.sp,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
             }
         }
 
@@ -269,8 +306,14 @@ fun ScheduleEditScreen(scheduleId: Long, onDone: () -> Unit) {
                     append(if (startMinutes + durationMinutes > Schedule.MINUTES_PER_DAY) "次日 " else "当天 ")
                     append(end.toHhMm())
                     append(" 自动解除。\n")
-                    append("生效于：")
-                    append(days.describeDays())
+                    if (days.isEmpty()) {
+                        append("单次：下一个 ")
+                        append(startMinutes.toHhMm())
+                        append(" 锁一次，之后自动停用。")
+                    } else {
+                        append("生效于：")
+                        append(days.describeDays())
+                    }
                 },
                 fontSize = 13.sp,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
@@ -291,7 +334,6 @@ fun ScheduleEditScreen(scheduleId: Long, onDone: () -> Unit) {
                     persistSchedule(context, saved)
                     onDone()
                 },
-                enabled = days.isNotEmpty(),
                 modifier = Modifier.weight(1f)
             ) {
                 Text(androidx.compose.ui.res.stringResource(R.string.action_save))
@@ -310,17 +352,6 @@ fun ScheduleEditScreen(scheduleId: Long, onDone: () -> Unit) {
 
         Spacer(Modifier.height(24.dp))
     }
-
-    if (showTimePicker) {
-        TimePickerDialog(
-            initialMinutes = startMinutes,
-            onDismiss = { showTimePicker = false },
-            onConfirm = { minutes ->
-                startMinutes = minutes
-                showTimePicker = false
-            }
-        )
-    }
 }
 
 private fun persistSchedule(context: Context, schedule: Schedule) {
@@ -330,79 +361,4 @@ private fun persistSchedule(context: Context, schedule: Schedule) {
     AlarmScheduler.scheduleNextStart(context, schedule)
 }
 
-@Composable
-private fun TimePickerDialog(
-    initialMinutes: Int,
-    onDismiss: () -> Unit,
-    onConfirm: (Int) -> Unit
-) {
-    // 故意不用 Material3 的 TimePicker + rememberTimePickerState：
-    // 那是实验性 API，签名在 1.2 / 1.3 / 1.4 之间变过，是编译期最不确定的一处。
-    // 这里用 FilterChip 拼一个选择器，全部是稳定 API，而且锁机场景本来就是整点/半点居多。
-    var hour by remember { mutableIntStateOf(initialMinutes / 60) }
-    var minute by remember { mutableIntStateOf((initialMinutes % 60) / 5 * 5) }
 
-    AlertDialog(
-        onDismissRequest = onDismiss,
-        title = { Text("选择起始时间") },
-        text = {
-            Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                Text(
-                    text = "%02d:%02d".format(hour, minute),
-                    fontSize = 40.sp,
-                    fontWeight = FontWeight.Medium
-                )
-
-                Spacer(Modifier.height(16.dp))
-                Text(
-                    text = "小时",
-                    fontSize = 12.sp,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                )
-                Spacer(Modifier.height(6.dp))
-                Row(
-                    horizontalArrangement = Arrangement.spacedBy(6.dp),
-                    modifier = Modifier.horizontalScroll(rememberScrollState())
-                ) {
-                    (0..23).forEach { h ->
-                        FilterChip(
-                            selected = h == hour,
-                            onClick = { hour = h },
-                            label = { Text("%02d".format(h)) }
-                        )
-                    }
-                }
-
-                Spacer(Modifier.height(16.dp))
-                Text(
-                    text = "分钟",
-                    fontSize = 12.sp,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                )
-                Spacer(Modifier.height(6.dp))
-                Row(
-                    horizontalArrangement = Arrangement.spacedBy(6.dp),
-                    modifier = Modifier.horizontalScroll(rememberScrollState())
-                ) {
-                    (0..55 step 5).forEach { m ->
-                        FilterChip(
-                            selected = m == minute,
-                            onClick = { minute = m },
-                            label = { Text("%02d".format(m)) }
-                        )
-                    }
-                }
-            }
-        },
-        confirmButton = {
-            TextButton(onClick = { onConfirm(hour * 60 + minute) }) {
-                Text(androidx.compose.ui.res.stringResource(R.string.action_confirm))
-            }
-        },
-        dismissButton = {
-            TextButton(onClick = onDismiss) {
-                Text(androidx.compose.ui.res.stringResource(R.string.action_cancel))
-            }
-        }
-    )
-}

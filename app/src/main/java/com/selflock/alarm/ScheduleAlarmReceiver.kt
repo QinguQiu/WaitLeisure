@@ -31,9 +31,17 @@ class ScheduleAlarmReceiver : BroadcastReceiver() {
         if (schedule != null && schedule.enabled) {
             val endAt = System.currentTimeMillis() + schedule.durationMinutes * 60_000L
             LockController.lock(context, endAt, schedule.id)
-            // 排好本次的结束闹钟，以及「明天同一时刻」的下一次开始闹钟
+            // 本次锁定的结束闹钟必须排上
             AlarmScheduler.scheduleEnd(context, endAt, schedule.id)
-            AlarmScheduler.scheduleNextStart(context, schedule)
+
+            if (schedule.days.isEmpty()) {
+                // 单次：触发一次就消耗掉 —— 置为停用，列表里随之变灰。
+                // 用户把开关重新打开即可再次触发（会重新排下一个该时刻）。
+                Repos.schedules.upsert(schedule.copy(enabled = false))
+            } else {
+                // 每日 / 每周：接着排下一次
+                AlarmScheduler.scheduleNextStart(context, schedule)
+            }
         }
 
         // 即便规则已被删除，也校准一次状态，避免出现「该锁却没锁」的缝隙

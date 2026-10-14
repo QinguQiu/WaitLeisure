@@ -37,13 +37,16 @@ object AlarmScheduler {
         }
     }
 
-    /** 为一条规则安排「下一次触发」。规则被停用或没选任何星期时，直接取消。 */
+    /** 为一条规则安排「下一次触发」。规则被停用时撤掉开始闹钟。 */
     fun scheduleNextStart(context: Context, schedule: Schedule) {
-        if (!schedule.enabled || schedule.days.isEmpty()) {
-            cancel(context, schedule.id)
+        val am = alarmManager(context) ?: return
+        if (!schedule.enabled) {
+            // 只撤开始闹钟，**不要**顺手撤结束闹钟 ——
+            // 单次规则触发后会被置为停用，那时本次锁定还在进行中，
+            // 把结束闹钟一起撤了就再没人来解锁了。
+            am.cancel(startPendingIntent(context, schedule.id))
             return
         }
-        val am = alarmManager(context) ?: return
         val triggerAt = nextTriggerMillis(schedule) ?: return
         setExact(am, triggerAt, startPendingIntent(context, schedule.id))
     }
@@ -62,12 +65,24 @@ object AlarmScheduler {
 
     /**
      * 计算下一次触发时刻。
-     * 从今天起最多往后找 8 天 —— 足以覆盖「每周只选一天」这种配置。
+     *
+     * - 选了星期：从今天起最多往后找 8 天，足以覆盖「每周只选一天」。
+     * - 没选星期（**单次**）：只在下一个该时刻触发一次 ——
+     *   今天还没到就今天，已经过了就明天。
      */
     fun nextTriggerMillis(schedule: Schedule, now: LocalDateTime = LocalDateTime.now()): Long? {
-        if (schedule.days.isEmpty()) return null
         val zone = ZoneId.systemDefault()
         val time = LocalTime.of(schedule.startMinutes / 60, schedule.startMinutes % 60)
+
+        if (schedule.days.isEmpty()) {
+            for (offset in 0..1L) {
+                val candidate = LocalDateTime.of(now.toLocalDate().plusDays(offset), time)
+                if (candidate.isAfter(now)) {
+                    return candidate.atZone(zone).toInstant().toEpochMilli()
+                }
+            }
+            return null
+        }
 
         for (offset in 0..7L) {
             val date = now.toLocalDate().plusDays(offset)

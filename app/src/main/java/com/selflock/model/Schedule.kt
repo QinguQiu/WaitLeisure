@@ -14,7 +14,8 @@ data class AppInfo(
  *
  * @param startMinutes    当天 0 点起的分钟数，0..1439
  * @param durationMinutes 锁定时长，1..1440
- * @param days            生效的星期，取值 1..7 对应 java.time.DayOfWeek（1=周一，7=周日）
+ * @param days            生效的星期，取值 1..7 对应 java.time.DayOfWeek（1=周一，7=周日）。
+ *                        **空集合 = 单次**：只在下一个该时刻锁一次，锁完自动置为停用。
  */
 data class Schedule(
     val id: Long,
@@ -40,12 +41,16 @@ fun Int.toHhMm(): String = "%02d:%02d".format(this / 60, this % 60)
 /** 星期标签，索引 = DayOfWeek.value - 1。 */
 val DAY_LABELS = listOf("一", "二", "三", "四", "五", "六", "日")
 
-/** 把 day 集合渲染成「每天 / 工作日 / 周一、周三」这样的短描述。 */
+/**
+ * 把 day 集合渲染成「每天 / 工作日 / 周一、周三」这样的短描述。
+ *
+ * 空集合不是「未选择」而是**单次**：只在下一个该时刻锁一次，锁完自动停用。
+ */
 fun Set<Int>.describeDays(): String = when {
     size == 7 -> "每天"
     this == setOf(1, 2, 3, 4, 5) -> "工作日"
     this == setOf(6, 7) -> "周末"
-    isEmpty() -> "未选择"
+    isEmpty() -> "单次"
     else -> sorted().joinToString("、") { "周${DAY_LABELS[it - 1]}" }
 }
 
