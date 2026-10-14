@@ -82,4 +82,39 @@ object HolidayCalendar {
     /** 是否是「调休上班日」：本来是周末，被改成工作日。 */
     fun isMakeupWorkday(date: LocalDate): Boolean =
         TABLE[date.year]?.work?.contains(key(date)) ?: false
+
+    /**
+     * 现在是不是该提醒用户「节假日数据该更新了」。
+     *
+     * 两个触发点：
+     *  - **已过期**：当前年份超出表的覆盖范围 —— 节假日模式正在悄悄退化成只看星期几，
+     *    用户多半没察觉，必须提醒。
+     *  - **到公告季**：明年还没数据，且已经进入 11 月 —— 国务院一般每年 11 月
+     *    公布次年安排，这时提醒才 actionable（早于 11 月提醒也没东西可更）。
+     *
+     * @param now 便于测试注入；默认取系统当前日期。
+     */
+    fun needsUpdateReminder(now: LocalDate = LocalDate.now()): Boolean {
+        val latest = latestYear ?: return false
+        if (now.year > latest) return true
+        return now.year + 1 > latest && now.monthValue >= ANNOUNCE_MONTH
+    }
+
+    /**
+     * 提醒文案；不需要提醒时返回 null（界面据此决定要不要显示那张卡片）。
+     */
+    fun updateReminderText(now: LocalDate = LocalDate.now()): String? {
+        val latest = latestYear ?: return null
+        if (!needsUpdateReminder(now)) return null
+        return if (now.year > latest) {
+            "内置的节假日数据只到 $latest 年，今年已经用不上了。" +
+                "「跳过节假日 / 只在节假日」这两个模式会退化成只看星期几 —— 建议更新 App。"
+        } else {
+            "国务院一般每年 11 月公布次年的放假安排。" +
+                "内置数据目前到 $latest 年，更新 App 即可补上明年的。"
+        }
+    }
+
+    /** 公告季起始月份：国务院通常 11 月发次年的放假安排。 */
+    private const val ANNOUNCE_MONTH = 11
 }

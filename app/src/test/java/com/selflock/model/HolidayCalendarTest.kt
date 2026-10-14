@@ -2,6 +2,8 @@ package com.selflock.model
 
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
+import org.junit.Assert.assertNotNull
+import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
 import java.time.LocalDate
@@ -107,5 +109,41 @@ class HolidayCalendarTest {
         val s = workdays.copy(holidayMode = HolidayMode.SKIP_HOLIDAY)
         // 2027-01-01 是周五，表里没数据 → 当成普通工作日
         assertTrue(s.matchesDate(date(2027, 1, 1)))
+    }
+
+    // ---------------------------------------------------------------- 更新提醒
+
+    @Test
+    fun `数据没过期且没到公告季 不提醒`() {
+        // 2026-10-14：表覆盖到 2026，公告季（11 月）还没到
+        assertFalse(HolidayCalendar.needsUpdateReminder(date(2026, 10, 14)))
+        assertNull(HolidayCalendar.updateReminderText(date(2026, 10, 14)))
+    }
+
+    @Test
+    fun `公告季的边界正好卡在 11 月 1 日`() {
+        assertFalse("10/31 还差一天", HolidayCalendar.needsUpdateReminder(date(2026, 10, 31)))
+        assertTrue("11/1 到了", HolidayCalendar.needsUpdateReminder(date(2026, 11, 1)))
+    }
+
+    @Test
+    fun `进入公告季后 提醒次年数据该更新了`() {
+        val text = HolidayCalendar.updateReminderText(date(2026, 11, 1))
+        assertNotNull(text)
+        assertTrue("应该提到覆盖到哪一年：$text", text!!.contains("2026"))
+        assertTrue("应该提到 11 月公布：$text", text.contains("11 月"))
+    }
+
+    @Test
+    fun `跨年后数据已过期 换一套更重的文案`() {
+        val text = HolidayCalendar.updateReminderText(date(2027, 3, 1))
+        assertNotNull(text)
+        assertTrue("过期文案要说清后果：$text", text!!.contains("退化成只看星期几"))
+    }
+
+    @Test
+    fun `已过期之后每年都提醒`() {
+        assertTrue(HolidayCalendar.needsUpdateReminder(date(2027, 5, 1)))
+        assertTrue(HolidayCalendar.needsUpdateReminder(date(2028, 5, 1)))
     }
 }

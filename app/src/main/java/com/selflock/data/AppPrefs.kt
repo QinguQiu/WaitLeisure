@@ -89,6 +89,14 @@ class AppPrefs(context: Context) {
         get() = sp.getBoolean(KEY_WHITELIST_GRID, false)
         set(value) = sp.edit().putBoolean(KEY_WHITELIST_GRID, value).apply()
 
+    /**
+     * 「节假日数据该更新了」这条提醒，用户点了「知道了」的年份。
+     * 0 = 还没关过。存年份是为了明年能再提醒一次，而不是永久闭嘴。
+     */
+    var holidayReminderDismissedYear: Int
+        get() = sp.getInt(KEY_HOLIDAY_DISMISSED_YEAR, 0)
+        set(value) = sp.edit().putInt(KEY_HOLIDAY_DISMISSED_YEAR, value).apply()
+
     private companion object {
         const val NAME = "selflock_prefs"
         const val KEY_WHITELIST = "whitelist"
@@ -104,6 +112,7 @@ class AppPrefs(context: Context) {
         const val KEY_POMODORO_CONFIG = "pomodoro_config"
         const val KEY_POMODORO_STATE = "pomodoro_state"
         const val KEY_WHITELIST_GRID = "whitelist_grid"
+        const val KEY_HOLIDAY_DISMISSED_YEAR = "holiday_dismissed_year"
         const val DEFAULT_QUICK_DURATIONS = "5,15,30,60,120,480"
         const val DEFAULT_WALLPAPER_COLOR = 0xFF000000.toInt()
         const val DEFAULT_POMODORO = "4,25,5,15,2"

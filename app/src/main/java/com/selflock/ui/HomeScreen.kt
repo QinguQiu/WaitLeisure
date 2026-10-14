@@ -59,6 +59,8 @@ import androidx.compose.ui.unit.sp
 import com.selflock.alarm.AlarmScheduler
 import com.selflock.data.Repos
 import com.selflock.data.WhitelistGroup
+import com.selflock.model.HolidayCalendar
+import com.selflock.model.HolidayMode
 import com.selflock.util.DiagLog
 import com.selflock.lock.LockAccessibilityService
 import com.selflock.lock.LockController
@@ -73,6 +75,7 @@ import com.selflock.model.AppInfo
 import java.io.File
 import java.io.FileOutputStream
 import java.time.Instant
+import java.time.LocalDate
 import java.time.LocalDateTime
 import java.time.ZoneId
 
@@ -97,6 +100,18 @@ fun HomeScreen(onOpenPermissions: () -> Unit) {
     var showLockNowDialog by remember { mutableStateOf(false) }
     // 记住上次选的时长，下次打开弹窗时沿用，不用每次重选
     var lockNowMinutes by remember { mutableIntStateOf(DEFAULT_LOCK_NOW_MINUTES) }
+    var holidayDismissed by remember {
+        mutableIntStateOf(Repos.prefs.holidayReminderDismissedYear)
+    }
+
+    // 节假日数据过期提醒。
+    // 只有真的用到了节假日模式才提醒 —— 没用到的话数据过期也毫无影响，提醒纯属噪音。
+    // 关掉只关「今年」，明年会再提醒一次（存的是年份而不是布尔）。
+    val currentYear = remember { LocalDate.now().year }
+    val holidayReminder = remember(holidayDismissed, currentYear) {
+        val inUse = Repos.schedules.current().any { it.holidayMode != HolidayMode.IGNORE }
+        if (inUse && holidayDismissed != currentYear) HolidayCalendar.updateReminderText() else null
+    }
 
     Column(
         modifier = Modifier
@@ -169,6 +184,27 @@ fun HomeScreen(onOpenPermissions: () -> Unit) {
                 )
                 Spacer(Modifier.height(4.dp))
                 TextButton(onClick = onOpenPermissions) { Text("打开加固权限") }
+            }
+        }
+
+        // 节假日数据过期提醒。放假安排每年 11 月才公布次年版本，
+        // 表过期后「跳过节假日 / 只在节假日」会悄悄退化成只看星期几 —— 用户不会自己发现。
+        if (holidayReminder != null) {
+            SectionCard(
+                title = "📅 节假日数据该更新了",
+                subtitle = "放假安排每年更新一次"
+            ) {
+                Text(
+                    text = holidayReminder,
+                    fontSize = 12.sp,
+                    lineHeight = 17.sp,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+                Spacer(Modifier.height(4.dp))
+                TextButton(onClick = {
+                    Repos.prefs.holidayReminderDismissedYear = currentYear
+                    holidayDismissed = currentYear
+                }) { Text("知道了，今年不再提醒") }
             }
         }
 
