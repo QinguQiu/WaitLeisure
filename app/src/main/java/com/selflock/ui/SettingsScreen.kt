@@ -44,6 +44,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.unit.dp
@@ -98,6 +99,11 @@ fun SettingsScreen() {
             .padding(16.dp),
         verticalArrangement = Arrangement.spacedBy(12.dp)
     ) {
+        GroupHeader(
+            title = "解锁与安全",
+            hint = "锁定期间能不能提前退出"
+        )
+
         SectionCard(
             title = "解锁 PIN",
             subtitle = if (!pinSet) {
@@ -159,6 +165,11 @@ fun SettingsScreen() {
             }
         }
 
+        GroupHeader(
+            title = "锁机外观",
+            hint = "锁机页长什么样"
+        )
+
         SectionCard(
             title = "锁机页壁纸",
             subtitle = "纯色或自定义图片"
@@ -192,6 +203,11 @@ fun SettingsScreen() {
                 }
             }
         }
+
+        GroupHeader(
+            title = "白名单",
+            hint = "锁定期间哪些应用还能用"
+        )
 
         SectionCard(
             title = "白名单分组",
@@ -233,6 +249,11 @@ fun SettingsScreen() {
                 Text("＋ 新建分组")
             }
         }
+
+        GroupHeader(
+            title = "专注模式",
+            hint = "番茄钟轮转"
+        )
 
         SectionCard(
             title = "番茄钟",
@@ -301,6 +322,35 @@ fun SettingsScreen() {
 }
 
 // ---------------------------------------------------------------- 常量 / 工具
+
+/**
+ * 设置页的分组标题。
+ *
+ * 设置项一多就容易变成一长串平铺的卡片，找不到想改的那条。
+ * 按用途分组、每组一句话说明「这组管什么」，扫一眼就知道该往哪找。
+ */
+@Composable
+private fun GroupHeader(title: String, hint: String? = null) {
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(start = 4.dp, top = 10.dp)
+    ) {
+        Text(
+            text = title,
+            fontSize = 13.sp,
+            fontWeight = FontWeight.SemiBold,
+            color = MaterialTheme.colorScheme.primary
+        )
+        if (hint != null) {
+            Text(
+                text = hint,
+                fontSize = 11.sp,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+        }
+    }
+}
 
 /**
  * 锁机页壁纸预设色。

@@ -107,6 +107,9 @@ class LockScreenActivity : ComponentActivity() {
                 LockScreenRoute(onExit = { finish() })
             }
         }
+
+        // 必须放在 setContent **之后** —— 见 applyStatusBarAppearance 的说明。
+        applyStatusBarAppearance()
     }
 
     override fun onResume() {
@@ -142,19 +145,36 @@ class LockScreenActivity : ComponentActivity() {
         // 不把它设成 edge-to-edge，状态栏会显示 Activity 主题的底色，和壁纸不同色。
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
             window.setDecorFitsSystemWindows(false)
-            // 状态栏/导航栏图标用白色：锁机页背景都是深色或暗图，深色图标看不清；
-            // 而且「浅色外观」会让系统在状态栏铺一层白底 —— 那正是用户看到的
-            // 「状态栏有时完全变成白底」。这里显式清掉 LIGHT 标志位。
-            window.insetsController?.setSystemBarsAppearance(
-                0,
-                WindowInsetsController.APPEARANCE_LIGHT_STATUS_BARS or
-                    WindowInsetsController.APPEARANCE_LIGHT_NAVIGATION_BARS
-            )
         } else {
             @Suppress("DEPRECATION")
             window.addFlags(WindowManager.LayoutParams.FLAG_DRAWS_SYSTEM_BAR_BACKGROUNDS)
             @Suppress("DEPRECATION")
             window.statusBarColor = android.graphics.Color.TRANSPARENT
+        }
+    }
+
+    /**
+     * 状态栏/导航栏图标改成白色。
+     *
+     * 锁机页背景都是深色或暗图，深色图标看不清；而且「浅色外观」还会让系统
+     * 在状态栏铺一层白底 —— 那正是用户看到的「状态栏有时完全变成白底」。
+     * 所以这里显式清掉 LIGHT 标志位。
+     *
+     * **必须在 setContent 之后调用。** window.insetsController 内部要拿 DecorView，
+     * 而 DecorView 是在 setContentView 时才创建的 —— 放在 onCreate 开头会直接
+     * NPE：`DecorView.getWindowInsetsController() on a null object reference`。
+     * （真机踩过：LockScreenActivity 每次都崩在 onCreate，只是悬浮窗还能盖住屏幕，
+     *   表面上看不出来。）
+     */
+    private fun applyStatusBarAppearance() {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
+            runCatching {
+                window.insetsController?.setSystemBarsAppearance(
+                    0,
+                    WindowInsetsController.APPEARANCE_LIGHT_STATUS_BARS or
+                        WindowInsetsController.APPEARANCE_LIGHT_NAVIGATION_BARS
+                )
+            }
         }
     }
 

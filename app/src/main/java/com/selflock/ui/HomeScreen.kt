@@ -76,38 +76,8 @@ import java.time.Instant
 import java.time.LocalDateTime
 import java.time.ZoneId
 
-/** 一次权限体检的快照。 */
-data class PermissionSnapshot(
-    val accessibility: Boolean,
-    val exactAlarm: Boolean,
-    val notification: Boolean,
-    val battery: Boolean,
-    val deviceAdmin: Boolean,
-    val overlay: Boolean,
-    val usageStats: Boolean
-) {
-    val okCount: Int
-        get() = listOf(
-            accessibility, exactAlarm, notification, battery, deviceAdmin, overlay, usageStats
-        ).count { it }
-
-    val allOk: Boolean get() = okCount == 7
-
-    companion object {
-        fun of(context: Context) = PermissionSnapshot(
-            accessibility = Permissions.isAccessibilityEnabled(context),
-            exactAlarm = Permissions.canScheduleExactAlarms(context),
-            notification = Permissions.areNotificationsEnabled(context),
-            battery = Permissions.isIgnoringBatteryOptimizations(context),
-            deviceAdmin = Permissions.isDeviceAdminActive(context),
-            overlay = Permissions.canDrawOverlays(context),
-            usageStats = Permissions.canReadUsageStats(context)
-        )
-    }
-}
-
 @Composable
-fun HomeScreen() {
+fun HomeScreen(onOpenPermissions: () -> Unit) {
     val context = LocalContext.current
     val locked by Repos.lockState.locked.collectAsState()
     val whitelist by Repos.whitelist.packages.collectAsState()
@@ -135,6 +105,37 @@ fun HomeScreen() {
             .padding(16.dp),
         verticalArrangement = Arrangement.spacedBy(12.dp)
     ) {
+        // 右上角「加固权限」入口。徽标直接把体检结果顶到脸上 ——
+        // 权限没配齐是「锁机看起来在跑、其实能被绕过」的唯一原因，
+        // 藏进二级页之后更需要在首页有个显眼的状态位。
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Text(
+                text = "SelfLock",
+                fontSize = 17.sp,
+                fontWeight = FontWeight.SemiBold
+            )
+            Spacer(Modifier.weight(1f))
+            TextButton(onClick = onOpenPermissions) {
+                Text(
+                    text = if (perms.allOk) {
+                        "\uD83D\uDEE1 加固权限 · 已就绪"
+                    } else {
+                        "\u26A0\uFE0F 加固权限 ${perms.okCount}/${PermissionSnapshot.TOTAL}"
+                    },
+                    fontSize = 14.sp,
+                    fontWeight = FontWeight.Medium,
+                    color = if (perms.allOk) {
+                        MaterialTheme.colorScheme.primary
+                    } else {
+                        MaterialTheme.colorScheme.error
+                    }
+                )
+            }
+        }
+
         StatusCard(
             locked = locked,
             scheduleCount = schedules.count { it.enabled },
@@ -147,6 +148,7 @@ fun HomeScreen() {
         // 无障碍服务没在跑时，锁机完全不生效，而且界面上不会有任何报错。
         // 这张卡片必须放在最上面 —— 放到页面底部等于没有：用户不滚动就看不到，
         // 实测用 uiautomator 抓屏幕内容时，屏幕外的节点根本抓不到。
+        // 详细体检表已经搬到「加固权限」页，这里只留最要命的一条 + 入口。
         if (!Permissions.isAccessibilityEnabled(context)) {
             SectionCard(
                 title = "⚠️ 无障碍服务未运行 —— 锁机当前不生效",
@@ -165,86 +167,8 @@ fun HomeScreen() {
                     fontSize = 12.sp,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
-            }
-        }
-
-        SectionCard(
-            title = "权限体检",
-            subtitle = "已就绪 ${perms.okCount} / 7 · 缺任何一项都会让锁机漏风"
-        ) {
-            CheckRow(
-                ok = perms.accessibility,
-                title = "无障碍服务",
-                description = "拦截非白名单应用，锁机的地基",
-                actionLabel = "去开启",
-                onAction = { Permissions.openAccessibilitySettings(context) }
-            )
-            CheckRow(
-                ok = perms.exactAlarm,
-                title = "闹钟和提醒",
-                description = "Android 12+ 必需，否则定时可能不准",
-                actionLabel = "去开启",
-                onAction = { Permissions.openExactAlarmSettings(context) }
-            )
-            CheckRow(
-                ok = perms.notification,
-                title = "通知权限",
-                description = "锁机期间显示常驻通知",
-                actionLabel = "去开启",
-                onAction = { Permissions.openNotificationSettings(context) }
-            )
-            CheckRow(
-                ok = perms.battery,
-                title = "省电策略 / 忽略电池优化",
-                description = "先弹系统授权框；若未弹出则落到应用信息页，手动把「省电策略」设为「无限制」",
-                actionLabel = "去设置",
-                onAction = { Permissions.openBatteryOptimizationSettings(context) }
-            )
-            CheckRow(
-                ok = perms.deviceAdmin,
-                title = "设备管理员",
-                description = "锁机期间阻止「一键卸载」",
-                actionLabel = "去激活",
-                onAction = { Permissions.requestDeviceAdmin(context) }
-            )
-            CheckRow(
-                ok = perms.overlay,
-                title = "显示悬浮窗",
-                description = "全屏遮罩。没有它，连点几次 Home 就能逃到桌面 —— " +
-                    "因为 MIUI 会拒绝被 Home 切到后台的锁机页再回到前台，而遮罩不经过 Activity 启动",
-                actionLabel = "去授权",
-                onAction = { Permissions.openOverlaySettings(context) }
-            )
-            CheckRow(
-                ok = perms.usageStats,
-                title = "使用情况访问",
-                description = "前台应用的第二信号源。无障碍服务「绑定但没收事件」时用它兜底",
-                actionLabel = "去授权",
-                onAction = { Permissions.openUsageAccessSettings(context) }
-            )
-            Spacer(Modifier.height(4.dp))
-            TextButton(onClick = { refreshKey++ }) {
-                Text("重新检测")
-            }
-        }
-
-        // MIUI 的「后台弹出界面」不在上面的体检里 —— 它是 MIUI 自加的权限，
-        // 没有 AOSP 接口可以查询，只能引导用户去开关。
-        SectionCard(
-            title = "MIUI 专属：后台弹出界面",
-            subtitle = "不在这张体检表里（MIUI 自加权限，查不到状态）"
-        ) {
-            Text(
-                text = "它才是「允许应用从后台弹出界面」的正式开关。开了它，锁机页被 Home 推到后台后\n" +
-                    "也能顺利回到前台，不再依赖遮罩兜底。\n\n" +
-                    "如果连点几次 Home 还是能回到桌面，多半就是它没开。",
-                fontSize = 12.sp,
-                lineHeight = 17.sp,
-                color = MaterialTheme.colorScheme.onSurfaceVariant
-            )
-            Spacer(Modifier.height(4.dp))
-            TextButton(onClick = { Permissions.openMiuiPermissionEditor(context) }) {
-                Text("打开 MIUI 权限页")
+                Spacer(Modifier.height(4.dp))
+                TextButton(onClick = onOpenPermissions) { Text("打开加固权限") }
             }
         }
 
