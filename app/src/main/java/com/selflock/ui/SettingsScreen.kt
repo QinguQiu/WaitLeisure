@@ -47,6 +47,7 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.input.PasswordVisualTransformation
+import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.selflock.data.Repos
@@ -100,29 +101,9 @@ fun SettingsScreen(onOpenTasks: () -> Unit = {}) {
             hint = "锁定期间能不能提前退出"
         )
 
-        SectionCard(
-            title = "解锁 PIN",
-            subtitle = if (!pinSet) {
-                "尚未设置。不设置也能用，但锁定期间可直接解除。"
-            } else {
-                "已设置。锁定期间输入 PIN 可提前解除。"
-            }
-        ) {
-            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                OutlinedButton(onClick = { showPinDialog = true }) {
-                    Text(if (!pinSet) "设置 PIN" else "修改 PIN")
-                }
-                if (pinSet) {
-                    OutlinedButton(onClick = {
-                        Repos.prefs.pinHash = null
-                        pinSet = false
-                    }) {
-                        Text("清除 PIN")
-                    }
-                }
-            }
-        }
-
+        // 顺序：先「能不能提前退出」，再「用什么退出」。
+        // 用户是先决定"要不要留解锁口子"，才轮到去设 PIN；反过来放会让人以为
+        // 必须设 PIN 才能关掉密码解锁。
         SectionCard(
             title = "锁机选项",
             subtitle = "锁定期间能不能提前退出"
@@ -155,9 +136,29 @@ fun SettingsScreen(onOpenTasks: () -> Unit = {}) {
                     }
                 )
             }
-            // 「立即锁机常用时长」这一项删掉了：简单锁机现在从**任务**里选，
-            // 时长由任务决定，再单独维护一份"常用时长"就是两套并行的时长入口。
-            // 「自定义时长…」兜底弹窗里的预设改成固定值，不再需要用户配置。
+        }
+
+        SectionCard(
+            title = "解锁 PIN",
+            subtitle = if (!pinSet) {
+                "尚未设置。不设置也能用，但锁定期间可直接解除。"
+            } else {
+                "已设置。PIN 只存哈希，**设置后无法再查看**，忘了只能清除重设。"
+            }
+        ) {
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                OutlinedButton(onClick = { showPinDialog = true }) {
+                    Text(if (!pinSet) "设置 PIN" else "修改 PIN")
+                }
+                if (pinSet) {
+                    OutlinedButton(onClick = {
+                        Repos.prefs.pinHash = null
+                        pinSet = false
+                    }) {
+                        Text("清除 PIN")
+                    }
+                }
+            }
         }
 
         GroupHeader(
@@ -382,11 +383,35 @@ fun PomodoroConfigDialog(onDismiss: () -> Unit, onSave: (String) -> Unit) {
     )
 }
 
+/**
+ * 设置解锁 PIN。
+ *
+ * 三条约定：
+ *  1. 输入框一律**掩码显示**（*），并且 PIN 只存哈希 —— 设置之后任何地方都看不到原文。
+ *  2. 「随机生成」一键给一个 4 位随机 PIN（自动填两遍，省得再输一次）。
+ *  3. 但随机 PIN 如果永远看不见就等于没设 —— 所以留一个「显示/隐藏」，
+ *     只在**设置这一刻**能对一眼，保存后就再也调不出来了。
+ */
 @Composable
 private fun SetPinDialog(onDismiss: () -> Unit, onSave: (String) -> Unit) {
     var pin by remember { mutableStateOf("") }
     var confirm by remember { mutableStateOf("") }
+    var visible by remember { mutableStateOf(false) }
+
+    val transform = if (visible) {
+        VisualTransformation.None
+    } else {
+        PasswordVisualTransformation()
+    }
     val valid = Pin.isValid(pin) && pin == confirm
+
+    // 4 位数字，避开全同号（0000/1111…）—— 那种一眼就能猜到
+    fun randomPin(): String {
+        while (true) {
+            val s = (1..4).map { ('0'..'9').random() }.joinToString("")
+            if (s.toSet().size > 1) return s
+        }
+    }
 
     AlertDialog(
         onDismissRequest = onDismiss,
@@ -398,8 +423,14 @@ private fun SetPinDialog(onDismiss: () -> Unit, onSave: (String) -> Unit) {
                     onValueChange = { pin = it.filter(Char::isDigit).take(12) },
                     singleLine = true,
                     label = { Text("PIN（至少 4 位数字）") },
-                    visualTransformation = PasswordVisualTransformation(),
-                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.NumberPassword)
+                    visualTransformation = transform,
+                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.NumberPassword),
+                    trailingIcon = {
+                        TextButton(onClick = { visible = !visible }) {
+                            Text(if (visible) "隐藏" else "显示", fontSize = 12.sp)
+                        }
+                    },
+                    modifier = Modifier.fillMaxWidth()
                 )
                 Spacer(Modifier.height(10.dp))
                 OutlinedTextField(
@@ -408,13 +439,28 @@ private fun SetPinDialog(onDismiss: () -> Unit, onSave: (String) -> Unit) {
                     singleLine = true,
                     isError = confirm.isNotEmpty() && confirm != pin,
                     label = { Text("再输一次") },
-                    visualTransformation = PasswordVisualTransformation(),
-                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.NumberPassword)
+                    visualTransformation = transform,
+                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.NumberPassword),
+                    modifier = Modifier.fillMaxWidth()
                 )
-                Spacer(Modifier.height(8.dp))
+
+                Spacer(Modifier.height(10.dp))
+                OutlinedButton(
+                    onClick = {
+                        // 自动填两遍，用户不必再把随机数抄一次
+                        val p = randomPin()
+                        pin = p
+                        confirm = p
+                    }
+                ) { Text("随机生成 4 位密码") }
+
+                Spacer(Modifier.height(10.dp))
                 Text(
-                    text = "请务必记住这个 PIN。忘了就只能去系统设置里关闭无障碍服务来解除锁定。",
+                    text = "随机生成后默认用 * 隐藏；想对一眼就点「显示」——" +
+                        "**保存之后就再也查不到了**（只存哈希）。\n" +
+                        "请务必记住。忘了只能去系统设置里关闭无障碍服务来解除锁定。",
                     fontSize = 11.sp,
+                    lineHeight = 16.sp,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
             }
