@@ -81,6 +81,14 @@ class AppPrefs(context: Context) {
         get() = sp.getString(KEY_POMODORO_STATE, "") ?: ""
         set(value) = sp.edit().putString(KEY_POMODORO_STATE, value).apply()
 
+    /**
+     * 白名单选择区是否用「大图标网格」显示。
+     * 存盘是为了切 tab 回来不重置 —— NavHost 是 when 切换，离开就 dispose。
+     */
+    var whitelistGrid: Boolean
+        get() = sp.getBoolean(KEY_WHITELIST_GRID, false)
+        set(value) = sp.edit().putBoolean(KEY_WHITELIST_GRID, value).apply()
+
     private companion object {
         const val NAME = "selflock_prefs"
         const val KEY_WHITELIST = "whitelist"
@@ -95,6 +103,7 @@ class AppPrefs(context: Context) {
         const val KEY_GROUPS = "whitelist_groups"
         const val KEY_POMODORO_CONFIG = "pomodoro_config"
         const val KEY_POMODORO_STATE = "pomodoro_state"
+        const val KEY_WHITELIST_GRID = "whitelist_grid"
         const val DEFAULT_QUICK_DURATIONS = "5,15,30,60,120,480"
         const val DEFAULT_WALLPAPER_COLOR = 0xFF000000.toInt()
         const val DEFAULT_POMODORO = "4,25,5,15,2"

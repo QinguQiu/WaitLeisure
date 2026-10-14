@@ -15,7 +15,11 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyRow
+import androidx.compose.foundation.lazy.grid.GridCells
+import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
+import androidx.compose.foundation.lazy.grid.items
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Checkbox
@@ -34,7 +38,9 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -66,6 +72,8 @@ fun WhitelistScreen() {
     val whitelist by Repos.whitelist.packages.collectAsState()
     val groups by Repos.groups.groups.collectAsState()
     var query by remember { mutableStateOf("") }
+    // 显示方式存盘，切 tab 回来不重置
+    var gridMode by remember { mutableStateOf(Repos.prefs.whitelistGrid) }
     var showGroupEdit by remember { mutableStateOf(false) }
     var editingGroup by remember { mutableStateOf<WhitelistGroup?>(null) }
 
@@ -135,16 +143,35 @@ fun WhitelistScreen() {
         Spacer(Modifier.height(16.dp))
 
         // ------------------------------------------------ 全局白名单
-        Text(
-            text = "全局白名单 · 已选 ${whitelist.size} 个",
-            fontSize = 16.sp,
-            fontWeight = FontWeight.SemiBold
-        )
-        Text(
-            text = "锁定期间，只有这里勾选的应用可以正常使用。",
-            fontSize = 11.sp,
-            color = MaterialTheme.colorScheme.onSurfaceVariant
-        )
+        // 标题在左、显示方式切换在右上角：大图标网格（图标+名称）方便凭图标认应用，
+        // 列表模式能看到包名、适合精确核对。两种各有各的用处，所以做成可切换。
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Column(Modifier.weight(1f)) {
+                Text(
+                    text = "全局白名单 · 已选 ${whitelist.size} 个",
+                    fontSize = 16.sp,
+                    fontWeight = FontWeight.SemiBold
+                )
+                Text(
+                    text = "锁定期间，只有这里勾选的应用可以正常使用。",
+                    fontSize = 11.sp,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            }
+            TextButton(onClick = {
+                gridMode = !gridMode
+                Repos.prefs.whitelistGrid = gridMode
+            }) {
+                Text(
+                    text = if (gridMode) "\u2630 列表" else "\u25A6 大图标",
+                    fontSize = 13.sp,
+                    fontWeight = FontWeight.Medium
+                )
+            }
+        }
 
         Spacer(Modifier.height(10.dp))
 
@@ -160,6 +187,22 @@ fun WhitelistScreen() {
 
         if (apps.isEmpty()) {
             EmptyHint("正在读取应用列表……")
+        } else if (gridMode) {
+            LazyVerticalGrid(
+                columns = GridCells.Fixed(4),
+                modifier = Modifier.fillMaxSize(),
+                horizontalArrangement = Arrangement.spacedBy(4.dp),
+                verticalArrangement = Arrangement.spacedBy(12.dp)
+            ) {
+                items(filtered, key = { it.packageName }) { app ->
+                    AppGridItem(
+                        app = app,
+                        checked = whitelist.contains(app.packageName),
+                        onClick = { Repos.whitelist.toggle(app.packageName) }
+                    )
+                }
+                item { Spacer(Modifier.height(24.dp)) }
+            }
         } else {
             LazyColumn(modifier = Modifier.fillMaxSize()) {
                 items(filtered, key = { it.packageName }) { app ->
@@ -279,6 +322,52 @@ private fun GroupCard(group: WhitelistGroup, onClick: () -> Unit) {
                 }
             }
         }
+    }
+}
+
+/**
+ * 大图标网格里的一格：图标 + 名称。
+ *
+ * 选中态用图标右上角的对勾徽标表示 —— 网格里没有复选框的位置，
+ * 而只靠「变灰/变色」区分选中与否在深浅色主题下都不够醒目。
+ */
+@Composable
+private fun AppGridItem(app: AppInfo, checked: Boolean, onClick: () -> Unit) {
+    Column(
+        horizontalAlignment = Alignment.CenterHorizontally,
+        modifier = Modifier
+            .clip(RoundedCornerShape(12.dp))
+            .clickable(onClick = onClick)
+            .padding(vertical = 6.dp, horizontal = 2.dp)
+    ) {
+        Box {
+            AppIcon(app.packageName, size = 56.dp)
+            if (checked) {
+                Box(
+                    modifier = Modifier
+                        .align(Alignment.TopEnd)
+                        .size(18.dp)
+                        .clip(CircleShape)
+                        .background(MaterialTheme.colorScheme.primary),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Text(text = "✓", color = Color.White, fontSize = 11.sp)
+                }
+            }
+        }
+        Spacer(Modifier.height(5.dp))
+        Text(
+            text = app.label,
+            fontSize = 11.sp,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis,
+            textAlign = TextAlign.Center,
+            color = if (checked) {
+                MaterialTheme.colorScheme.primary
+            } else {
+                MaterialTheme.colorScheme.onSurface
+            }
+        )
     }
 }
 
