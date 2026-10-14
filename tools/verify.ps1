@@ -140,9 +140,13 @@ if (Test-Path -LiteralPath $valuesDir) {
 }
 
 function Test-DrawableRes([string]$n) {
-    foreach ($d in @("drawable", "drawable-v24")) {
+    # 扫**所有** drawable* 目录，而不只是 drawable / drawable-v24。
+    # 图标改成位图前景后放在 drawable-nodpi 下，原来那份白名单认不出来，
+    # 于是 @drawable/ic_launcher_foreground 被误报成「未定义」。
+    $dirs = @(Get-ChildItem -LiteralPath (Join-Path $main "res") -Directory -Filter "drawable*" -ErrorAction SilentlyContinue)
+    foreach ($d in $dirs) {
         foreach ($ext in @(".xml", ".png", ".webp", ".jpg")) {
-            if (Test-Path -LiteralPath (Join-Path $main ("res\" + $d + "\" + $n + $ext))) { return $true }
+            if (Test-Path -LiteralPath (Join-Path $d.FullName ($n + $ext))) { return $true }
         }
     }
     return $false
