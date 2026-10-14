@@ -391,7 +391,10 @@ foreach ($f in $ktFiles) {
     foreach ($t in $typeToPkg.Keys) {
         if ($typeToPkg[$t] -eq $pkg) { continue }
         if ($imported.Contains($t)) { continue }
-        if ($body -cmatch ('\b' + [regex]::Escape($t) + '\b')) {
+        # (?<![\w.]) 排除「限定名」里的同名词 —— 例如 Screen.Permissions 里的
+        # Permissions 是枚举值，跟 com.selflock.util.Permissions 这个工具类没关系，
+        # 用 \b 会把后者也匹配进来，产生误报。
+        if ($body -cmatch ('(?<![\w.])' + [regex]::Escape($t) + '\b')) {
             $importChecks++
             Add-Issue ("跨包类型 " + $t + "（" + $typeToPkg[$t] + "）被使用但未 import，出现在 " + $pkg + " 包的 " + (Rel $f.FullName))
         }
