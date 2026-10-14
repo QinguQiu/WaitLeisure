@@ -299,6 +299,9 @@ foreach ($f in $ktFiles) {
         foreach ($e in [regex]::Matches($em.Groups[1].Value, '\b([A-Z][A-Za-z0-9_]*)\b')) {
             [void]$syms.Add($e.Groups[1].Value)
         }
+        # Kotlin 枚举自带这两个静态方法，源码里看不到，但 X.valueOf(...) / X.values() 合法
+        [void]$syms.Add("valueOf")
+        [void]$syms.Add("values")
     }
     # 同时收扩展函数：fun Schedule.matchesDate(...) 里的名字是 matchesDate 而不是接收者，
     # 直接 \bfun\s+(\w+) 会抓成 Schedule，导致 Schedule.matchesDate 被误报「找不到声明」。
