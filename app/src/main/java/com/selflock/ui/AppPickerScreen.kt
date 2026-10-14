@@ -56,10 +56,10 @@ const val PICKER_GLOBAL: Long = -1L
  *
  * 从白名单页点任意一个「框」进来：
  *   · 全局白名单框 → 编辑 [Repos.whitelist]
- *   · 分时段分组框 → 编辑那个分组的应用集合
+ *   · 分组框 → 编辑那个分组的应用集合
  *
  * 顶上左边返回、中间标题、**右上角是显示方式切换**（大图标网格 / 列表）。
- * 编辑分组时顶栏下面多一行，用来改名称/时段或删除整个分组。
+ * 编辑分组时顶栏下面多一行，用来改名称或删除整个分组。
  */
 @Composable
 fun AppPickerScreen(groupId: Long, onBack: () -> Unit) {
@@ -144,10 +144,10 @@ fun AppPickerScreen(groupId: Long, onBack: () -> Unit) {
             }
         }
 
-        // 分组才有：改名称/时段、删除
+        // 分组才有：改名称、删除
         if (group != null) {
             Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
-                TextButton(onClick = { showInfoEdit = true }) { Text("改名称 / 时段") }
+                TextButton(onClick = { showInfoEdit = true }) { Text("改名称") }
                 TextButton(onClick = {
                     Repos.groups.remove(group.id)
                     onBack()

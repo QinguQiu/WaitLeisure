@@ -243,8 +243,8 @@ internal fun LockScreenRoute(onExit: () -> Unit) {
 
     val whitelist by Repos.whitelist.packages.collectAsState()
 
-    // 当前生效的完整白名单（全局 + 生效分组），随 now 每秒重算一次。
-    // 分组是按时间段生效的，所以必须跟着时钟走，不能只在进入时算一次。
+    // 当前生效的完整白名单（全局 = 永远放行；再加上本次锁定选中的分组）。
+    // 分组已经不按时间段生效了，这里跟着 now 重算只是图省事 —— 开销是一次集合并集。
     val shownWhitelist = remember(now, whitelist) {
         Repos.effectiveWhitelist().sorted()
     }

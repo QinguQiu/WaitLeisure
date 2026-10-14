@@ -41,8 +41,8 @@ private const val BOX_MAX_ICONS = 32
 /**
  * 白名单页。
  *
- * 整页只有「框」：最上面一个全局白名单框，下面若干个分时段分组框。
- * 每个分组框占一整行 —— 横着挤一排的话，名字和时段都得截断，看不出这组是干嘛的。
+ * 整页只有「框」：最上面一个全局白名单框，下面若干个分组框。
+ * 每个分组框占一整行 —— 横着挤一排的话，名字得截断，看不出这组是干嘛的。
  *
  * 点任意一个框进应用选择页：选应用的地方统一在那一页，这里只负责总览。
  */
@@ -73,24 +73,25 @@ fun WhitelistScreen(
         // ------------------------------------------------ 全局白名单（最上）
         WhitelistBox(
             title = "全局白名单",
-            subtitle = "任何时段都可用 · 已选 ${whitelist.size} 个应用",
+            subtitle = "始终放行 · 已选 ${whitelist.size} 个应用",
             packages = whitelist,
             onClick = onOpenGlobal
         )
 
-        // ------------------------------------------------ 分时段分组
+        // ------------------------------------------------ 分组
         Row(
             modifier = Modifier.fillMaxWidth(),
             verticalAlignment = Alignment.CenterVertically
         ) {
             Column(Modifier.weight(1f)) {
                 Text(
-                    text = "分时段分组",
+                    text = "分组",
                     fontSize = 15.sp,
                     fontWeight = FontWeight.SemiBold
                 )
                 Text(
-                    text = "每组 = 一套应用 + 一个生效时段，到点自动切换",
+                    text = "每组就是一套应用，不带时间限制。\n" +
+                        "什么时候放行哪一组，去「定时」里新建规则时选。",
                     fontSize = 11.sp,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )

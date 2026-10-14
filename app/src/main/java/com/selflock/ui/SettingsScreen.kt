@@ -71,7 +71,6 @@ fun SettingsScreen(onOpenTasks: () -> Unit = {}) {
     var showPinDialog by remember { mutableStateOf(false) }
     var allowPinUnlock by remember { mutableStateOf(Repos.prefs.allowPinUnlock) }
     var showQuickEdit by remember { mutableStateOf(false) }
-    var showPomodoroEdit by remember { mutableStateOf(false) }
     var pinSet by remember { mutableStateOf(!Repos.prefs.pinHash.isNullOrEmpty()) }
 
     // 壁纸图片选择：选完复制到应用私有目录，锁机页直接读文件
@@ -201,27 +200,8 @@ fun SettingsScreen(onOpenTasks: () -> Unit = {}) {
             }
         }
 
-        GroupHeader(
-            title = "专注模式",
-            hint = "番茄钟轮转"
-        )
-
-        SectionCard(
-            title = "番茄钟",
-            subtitle = Pomodoro.describe(Repos.prefs.pomodoroConfig)
-        ) {
-            Text(
-                text = "按「循环次数 × 专注时长」轮转：每个循环结束时休息，若干循环后给一次长休息。\n" +
-                    "专注时段自动锁机，休息时段自动解锁。",
-                fontSize = 12.sp,
-                lineHeight = 17.sp,
-                color = MaterialTheme.colorScheme.onSurfaceVariant
-            )
-            Spacer(Modifier.height(8.dp))
-            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                OutlinedButton(onClick = { showPomodoroEdit = true }) { Text("自定义…") }
-            }
-        }
+        // 番茄钟板块整个搬到首页了 —— 这里不再重复一份。
+        // 「自定义…」入口也跟着挪到首页那行配置说明上（点那行即可修改）。
 
         GroupHeader(
             title = "任务",
@@ -263,16 +243,6 @@ fun SettingsScreen(onOpenTasks: () -> Unit = {}) {
             onSave = { text ->
                 Repos.prefs.quickDurations = text
                 showQuickEdit = false
-            }
-        )
-    }
-
-    if (showPomodoroEdit) {
-        PomodoroConfigDialog(
-            onDismiss = { showPomodoroEdit = false },
-            onSave = { text ->
-                Repos.prefs.pomodoroConfig = text
-                showPomodoroEdit = false
             }
         )
     }
@@ -369,8 +339,14 @@ private fun QuickDurationsDialog(onDismiss: () -> Unit, onSave: (String) -> Unit
     )
 }
 
+/**
+ * 番茄钟参数编辑框。
+ *
+ * 虽然是「设置」性质的东西，但入口已经跟着番茄钟一起搬到首页了 ——
+ * 所以这里是 public，由 HomeScreen 调用。
+ */
 @Composable
-private fun PomodoroConfigDialog(onDismiss: () -> Unit, onSave: (String) -> Unit) {
+fun PomodoroConfigDialog(onDismiss: () -> Unit, onSave: (String) -> Unit) {
     val cur = remember { Pomodoro.parse(Repos.prefs.pomodoroConfig) }
     var rounds by remember { mutableStateOf(cur.rounds.toString()) }
     var focus by remember { mutableStateOf(cur.focusMinutes.toString()) }

@@ -122,6 +122,8 @@ fun HomeScreen(onOpenPermissions: () -> Unit) {
 
     val perms = remember(refreshKey) { PermissionSnapshot.of(context) }
     var showLockNowDialog by remember { mutableStateOf(false) }
+    // 番茄钟参数编辑框（入口在状态卡那行配置说明上）
+    var showPomodoroEdit by remember { mutableStateOf(false) }
     // 记住上次选的时长，下次打开弹窗时沿用，不用每次重选
     var lockNowMinutes by remember { mutableIntStateOf(DEFAULT_LOCK_NOW_MINUTES) }
     var holidayDismissed by remember {
@@ -185,6 +187,7 @@ fun HomeScreen(onOpenPermissions: () -> Unit) {
             onLockNow = { showLockNowDialog = true },
             onStartPomodoro = { Pomodoro.start(context); refreshKey++ },
             onStopPomodoro = { Pomodoro.stop(context); refreshKey++ },
+            onEditPomodoro = { showPomodoroEdit = true },
             onOpenLockScreen = { LockScreenActivity.show(context) }
         )
 
@@ -302,6 +305,17 @@ fun HomeScreen(onOpenPermissions: () -> Unit) {
                 // 这里一律传具体的到期时间戳（而不是 0=无限期），
                 // 所以「立即锁机」一定会到点自动解除，不会出现无限期锁死的情况。
                 LockController.lock(context, System.currentTimeMillis() + minutes * 60_000L)
+            }
+        )
+    }
+
+    if (showPomodoroEdit) {
+        PomodoroConfigDialog(
+            onDismiss = { showPomodoroEdit = false },
+            onSave = { text ->
+                Repos.prefs.pomodoroConfig = text
+                showPomodoroEdit = false
+                refreshKey++
             }
         )
     }
@@ -429,6 +443,7 @@ private fun StatusCard(
     onLockNow: () -> Unit,
     onStartPomodoro: () -> Unit,
     onStopPomodoro: () -> Unit,
+    onEditPomodoro: () -> Unit,
     onOpenLockScreen: () -> Unit
 ) {
     SectionCard(
@@ -463,12 +478,18 @@ private fun StatusCard(
                 }
             }
             Spacer(Modifier.height(8.dp))
+            // 这行既是说明也是入口：点一下就能改番茄钟参数。
+            // 原来「自定义…」在设置页，番茄钟搬过来之后入口也一并搬过来，
+            // 否则参数就没地方改了。
             Text(
-                text = if (pomodoroActive) "番茄钟进行中 · $pomodoroText"
-                else "番茄钟：$pomodoroText",
+                text = (if (pomodoroActive) "番茄钟进行中 · $pomodoroText"
+                else "番茄钟：$pomodoroText") + "（点此修改）",
                 fontSize = 11.sp,
                 lineHeight = 15.sp,
-                color = MaterialTheme.colorScheme.onSurfaceVariant
+                color = MaterialTheme.colorScheme.primary,
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .clickable { onEditPomodoro() }
             )
         }
     }
