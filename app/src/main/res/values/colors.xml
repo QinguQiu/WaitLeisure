@@ -1,9 +1,9 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
     <!--
-      自适应图标背景：纯白。
-      前景是用户给的「极简黑白玫瑰小丘线稿」——黑线配白底才忠实原图，
-      所以这里从原来的品牌蓝改成白。
+      自适应图标背景：米白 #F4F3EB。
+      前景是用户给的彩色玫瑰小丘图（粉玫瑰 + 绿叶 + 青灰小丘），
+      这个底色就是从原图四角采样出来的，配在一起最自然。
     -->
-    <color name="ic_launcher_background">#FFFFFF</color>
+    <color name="ic_launcher_background">#F4F3EB</color>
 </resources>
