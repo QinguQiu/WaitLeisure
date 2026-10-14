@@ -1,5 +1,7 @@
 package com.selflock.ui
 
+import android.content.ClipData
+import android.content.ClipboardManager
 import android.content.Context
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
@@ -18,6 +20,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
@@ -193,8 +196,45 @@ fun PermissionScreen(onBack: () -> Unit) {
             }
         }
 
-        // 诊断日志刻意**不在这里**重复一份 —— 首页已经有一张卡片了。
-        // 「加固权限」页只负责系统权限，日志属于排查工具，放首页更顺手。
+        // 诊断日志放在这一页：出问题时本来就要先来这儿看权限，
+        // 日志跟体检表挨着，一次就能把「权限对不对」和「服务实际收到了什么」对着看。
+        var copied by remember { mutableStateOf(false) }
+        SectionCard(
+            title = "诊断日志",
+            subtitle = "服务" + (if (LockAccessibilityService.isConnected()) "已连接" else "未连接") +
+                " · 窗口事件 " + LockAccessibilityService.receivedEventCount() + " 次" +
+                " · 当前" + (if (Repos.lockState.isLockedNow()) "已锁定" else "未锁定")
+        ) {
+            val lines = remember(refreshKey) { DiagLog.snapshot() }.asReversed()
+            if (lines.isEmpty()) {
+                Text(
+                    text = "还没有记录。开启无障碍并锁机后，这里会显示每一个窗口切换事件。",
+                    fontSize = 11.sp,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            } else {
+                Text(
+                    text = lines.joinToString("\n"),
+                    fontSize = 11.sp,
+                    lineHeight = 16.sp,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            }
+            Spacer(Modifier.height(4.dp))
+            Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                TextButton(onClick = { refreshKey++ }) { Text("刷新") }
+                TextButton(
+                    enabled = lines.isNotEmpty(),
+                    onClick = {
+                        val dump = DiagLog.snapshot().joinToString("\n")
+                        val cm = context.getSystemService(ClipboardManager::class.java)
+                        cm?.setPrimaryClip(ClipData.newPlainText("等闲 诊断日志", dump))
+                        copied = true
+                    }
+                ) { Text(if (copied) "已复制 ✓" else "复制全部") }
+                TextButton(onClick = { DiagLog.clear(); refreshKey++ }) { Text("清空") }
+            }
+        }
 
         Spacer(Modifier.height(8.dp))
     }

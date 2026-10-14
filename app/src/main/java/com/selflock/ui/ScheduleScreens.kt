@@ -5,6 +5,8 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
+import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
@@ -29,6 +31,7 @@ import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
@@ -40,6 +43,8 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.selflock.R
@@ -219,6 +224,7 @@ private fun ScheduleCard(
 
 // ---------------------------------------------------------------- 编辑
 
+@OptIn(ExperimentalLayoutApi::class)
 @Composable
 fun ScheduleEditScreen(scheduleId: Long, onDone: () -> Unit) {
     val context = LocalContext.current
@@ -238,6 +244,18 @@ fun ScheduleEditScreen(scheduleId: Long, onDone: () -> Unit) {
     // 本次锁机额外放行哪个白名单分组；-1 = 只用全局
     val groups = remember { Repos.groups.current() }
     var groupId by remember { mutableLongStateOf(existing?.whitelistGroupId ?: Schedule.NO_GROUP) }
+
+    // 选中项实际会放行哪些应用 —— 下面要把图标全部铺出来
+    val globalWhitelist = Repos.whitelist.current()
+    val selectedPackages = if (groupId < 0) {
+        globalWhitelist
+    } else {
+        groups.firstOrNull { it.id == groupId }?.packages ?: emptySet()
+    }
+    // 图标是异步加载的，先备好，铺出来时就不会一个个闪
+    LaunchedEffect(groupId) {
+        prefetchAppIcons(selectedPackages.toList())
+    }
 
     Column(
         modifier = Modifier
@@ -347,32 +365,75 @@ fun ScheduleEditScreen(scheduleId: Long, onDone: () -> Unit) {
             }
         }
 
-        // 分组不再自带生效时段，「什么时候用哪一组」在这里说清楚
+        // 分组不再自带生效时段，「什么时候用哪一组」在这里说清楚。
+        // 选项用 FlowRow —— 分组多了要能换行铺满，横向滚动会看不全。
         SectionCard(
             title = "白名单",
             subtitle = if (groupId < 0) "只用全局白名单" else "额外放行一个分组"
         ) {
-            Row(
+            FlowRow(
                 horizontalArrangement = Arrangement.spacedBy(8.dp),
-                modifier = Modifier.horizontalScroll(rememberScrollState())
+                verticalArrangement = Arrangement.spacedBy(4.dp)
             ) {
                 FilterChip(
                     selected = groupId < 0,
                     onClick = { groupId = Schedule.NO_GROUP },
-                    label = { Text("全局") }
+                    label = { Text("全局（${globalWhitelist.size}）") }
                 )
                 groups.forEach { g ->
                     FilterChip(
                         selected = groupId == g.id,
                         onClick = { groupId = g.id },
-                        label = { Text(g.name) }
+                        label = { Text("${g.name}（${g.packages.size}）") }
                     )
                 }
             }
+
+            Spacer(Modifier.height(10.dp))
+            Text(
+                text = if (groupId < 0) "本次锁机放行的应用：" else "在全局白名单之外，额外放行：",
+                fontSize = 11.sp,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+            Spacer(Modifier.height(6.dp))
+
+            // 把这一组应用**全部**铺出来，多行换行，不截断也不横滚 ——
+            // 只看分组名根本想不起来里面到底放了哪几个应用，配错白名单就是这么来的。
+            if (selectedPackages.isEmpty()) {
+                Text(
+                    text = if (groupId < 0) "全局白名单是空的。去「白名单」页里加几个。" else "这个分组还没有应用。",
+                    fontSize = 11.sp,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            } else {
+                FlowRow(
+                    horizontalArrangement = Arrangement.spacedBy(10.dp),
+                    verticalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    selectedPackages.sorted().forEach { pkg ->
+                        Column(
+                            horizontalAlignment = Alignment.CenterHorizontally,
+                            modifier = Modifier.width(52.dp)
+                        ) {
+                            AppIcon(packageName = pkg, size = 36.dp)
+                            Spacer(Modifier.height(3.dp))
+                            Text(
+                                text = rememberAppLabel(pkg),
+                                fontSize = 9.sp,
+                                lineHeight = 11.sp,
+                                maxLines = 2,
+                                overflow = TextOverflow.Ellipsis,
+                                textAlign = TextAlign.Center,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                        }
+                    }
+                }
+            }
+
             Spacer(Modifier.height(8.dp))
             Text(
-                text = "全局白名单永远生效。选中某个分组时，本次锁机**额外**放行那一组应用；" +
-                    "分组只是「一套应用」，不带时间限制。",
+                text = "全局白名单永远生效；选中某个分组时，本次锁机在全局之外**额外**放行那一组应用。",
                 fontSize = 11.sp,
                 lineHeight = 16.sp,
                 color = MaterialTheme.colorScheme.onSurfaceVariant

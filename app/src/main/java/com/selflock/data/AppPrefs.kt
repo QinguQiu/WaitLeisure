@@ -49,9 +49,9 @@ class AppPrefs(context: Context) {
         set(value) = sp.edit().putBoolean(KEY_ALLOW_PIN_UNLOCK, value).apply()
 
     /** 立即锁机的常用时长（分钟，逗号分隔）。 */
-    var quickDurations: String
-        get() = sp.getString(KEY_QUICK_DURATIONS, DEFAULT_QUICK_DURATIONS) ?: DEFAULT_QUICK_DURATIONS
-        set(value) = sp.edit().putString(KEY_QUICK_DURATIONS, value).apply()
+    // 「立即锁机常用时长」（quick_durations）已删除：
+    // 简单锁机现在从任务里选，时长由任务决定，第二份时长入口是冗余的。
+    // 「自定义时长…」弹窗的预设改成代码里的固定值（SettingsScreen.quickDurationsList）。
 
     /** 锁机页壁纸颜色（ARGB int）。 */
     var wallpaperColor: Int
@@ -145,7 +145,7 @@ class AppPrefs(context: Context) {
         const val KEY_LOCKED_UNTIL = "locked_until"
         const val KEY_ACTIVE_SCHEDULE = "active_schedule"
         const val KEY_ALLOW_PIN_UNLOCK = "allow_pin_unlock"
-        const val KEY_QUICK_DURATIONS = "quick_durations"
+        // KEY_QUICK_DURATIONS 已随「立即锁机常用时长」一并删除
         const val KEY_WALLPAPER_COLOR = "wallpaper_color"
         const val KEY_WALLPAPER_IMAGE = "wallpaper_image"
         const val KEY_GROUPS = "whitelist_groups"
@@ -158,7 +158,7 @@ class AppPrefs(context: Context) {
         const val KEY_POMODORO_STATE = "pomodoro_state"
         const val KEY_WHITELIST_GRID = "whitelist_grid"
         const val KEY_HOLIDAY_DISMISSED_YEAR = "holiday_dismissed_year"
-        const val DEFAULT_QUICK_DURATIONS = "5,15,30,60,120,480"
+        // DEFAULT_QUICK_DURATIONS 已随「立即锁机常用时长」一并删除
         const val DEFAULT_WALLPAPER_COLOR = 0xFF000000.toInt()
         const val DEFAULT_POMODORO = "4,25,5,15,2"
     }

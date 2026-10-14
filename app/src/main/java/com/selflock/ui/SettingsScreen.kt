@@ -62,7 +62,7 @@ import java.io.FileOutputStream
  * 设置页。
  *
  * 把「跟锁机行为有关、平时不常改」的东西都收到这里：
- * PIN、允许密码解锁、立即锁机常用时长、锁机页壁纸、白名单分组、番茄钟配置。
+ * PIN、允许密码解锁、锁机页壁纸、白名单分组、任务、番茄钟配置。
  * 首页只留状态、权限体检和诊断，保持清爽。
  */
 @Composable
@@ -125,7 +125,7 @@ fun SettingsScreen(onOpenTasks: () -> Unit = {}) {
 
         SectionCard(
             title = "锁机选项",
-            subtitle = "密码解锁与常用时长"
+            subtitle = "锁定期间能不能提前退出"
         ) {
             Row(
                 verticalAlignment = Alignment.CenterVertically,
@@ -155,10 +155,9 @@ fun SettingsScreen(onOpenTasks: () -> Unit = {}) {
                     }
                 )
             }
-            Spacer(Modifier.height(10.dp))
-            TextButton(onClick = { showQuickEdit = true }) {
-                Text("立即锁机常用时长：${Repos.prefs.quickDurations} 分钟")
-            }
+            // 「立即锁机常用时长」这一项删掉了：简单锁机现在从**任务**里选，
+            // 时长由任务决定，再单独维护一份"常用时长"就是两套并行的时长入口。
+            // 「自定义时长…」兜底弹窗里的预设改成固定值，不再需要用户配置。
         }
 
         GroupHeader(
@@ -236,16 +235,6 @@ fun SettingsScreen(onOpenTasks: () -> Unit = {}) {
             }
         )
     }
-
-    if (showQuickEdit) {
-        QuickDurationsDialog(
-            onDismiss = { showQuickEdit = false },
-            onSave = { text ->
-                Repos.prefs.quickDurations = text
-                showQuickEdit = false
-            }
-        )
-    }
 }
 
 // ---------------------------------------------------------------- 常量 / 工具
@@ -295,49 +284,14 @@ val WALLPAPER_COLORS = listOf(
     Color(0xFF3F3F46)  // 灰
 )
 
-/** 解析「立即锁机常用时长」的逗号分隔列表。 */
-fun quickDurationsList(): List<Int> =
-    Repos.prefs.quickDurations
-        .split(',')
-        .mapNotNull { it.trim().toIntOrNull() }
-        .filter { it > 0 }
-        .ifEmpty { listOf(5, 15, 30, 60) }
-
-@Composable
-private fun QuickDurationsDialog(onDismiss: () -> Unit, onSave: (String) -> Unit) {
-    var text by remember { mutableStateOf(Repos.prefs.quickDurations) }
-    AlertDialog(
-        onDismissRequest = onDismiss,
-        title = { Text("立即锁机常用时长") },
-        text = {
-            Column {
-                OutlinedTextField(
-                    value = text,
-                    onValueChange = {
-                        text = it.filter { c -> c.isDigit() || c == ',' || c == ' ' }
-                    },
-                    singleLine = true,
-                    label = { Text("分钟数，用逗号分隔，如 5,15,30,60") }
-                )
-                Spacer(Modifier.height(8.dp))
-                Text(
-                    text = "这些会显示在「立即锁机」弹窗里作为快捷选项。",
-                    fontSize = 11.sp,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                )
-            }
-        },
-        confirmButton = {
-            TextButton(
-                enabled = text.split(',')
-                    .mapNotNull { it.trim().toIntOrNull() }
-                    .isNotEmpty(),
-                onClick = { onSave(text.trim()) }
-            ) { Text("保存") }
-        },
-        dismissButton = { TextButton(onClick = onDismiss) { Text("取消") } }
-    )
-}
+/**
+ * 「自定义时长…」弹窗里的快捷预设。
+ *
+ * 以前这是用户可配的（设置页有个「立即锁机常用时长」），现在改成固定值 ——
+ * 简单锁机已经走任务了，再维护第二份时长入口只会让人犯迷糊。
+ * 留这几个覆盖「临时锁一下」的常见档位即可，精确到分钟的调节由 DurationPicker 负责。
+ */
+fun quickDurationsList(): List<Int> = listOf(5, 15, 25, 45, 60, 120)
 
 /**
  * 番茄钟参数编辑框。
