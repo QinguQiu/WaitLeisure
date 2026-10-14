@@ -1,4 +1,4 @@
-﻿# SelfLock 工程静态校验
+﻿# WaitLeisure（等闲）工程静态校验
 #
 # 在没有 Android SDK / Gradle 的机器上，用纯 PowerShell 校验那些
 # 「不写出来编译器就会报错、但人眼很容易漏掉」的问题：
@@ -6,9 +6,9 @@
 #   2) Manifest 声明的组件类是否存在，且是否继承正确的 Android 基类
 #   3) 代码与 XML 中引用的每个 R.xxx / @xxx 资源是否真的定义了
 #   4) 每个 .kt 的 package 声明是否与它的目录层级一致
-#   5) 每个 import com.selflock.* 是否能在源码里解析到
+#   5) 每个 import com.waitleisure.* 是否能在源码里解析到
 #
-# 用法： $env:SELFLOCK_ROOT = "<工程根目录>"; & "<工程>\tools\verify.ps1"
+# 用法： $env:WAITLEISURE_ROOT = "<工程根目录>"; & "<工程>\tools\verify.ps1"
 #
 # !!! 重要 !!!
 # 本文件必须保存为「UTF-8 带 BOM」。Windows PowerShell 5.1 在没有 BOM 时
@@ -23,7 +23,7 @@ function Read-Text([string]$path) {
     return [System.IO.File]::ReadAllText($path, (New-Object System.Text.UTF8Encoding($false)))
 }
 
-$root = $env:SELFLOCK_ROOT
+$root = $env:WAITLEISURE_ROOT
 if ([string]::IsNullOrEmpty($root)) { $root = Join-Path (Get-Location) "SelfLock" }
 if (-not (Test-Path -LiteralPath $root)) { Write-Output "ROOT NOT FOUND: $root"; exit 1 }
 
@@ -31,7 +31,7 @@ $main = Join-Path $root "app\src\main"
 if (-not (Test-Path -LiteralPath $main)) { Write-Output "MAIN NOT FOUND: $main"; exit 1 }
 
 $ktRoot = Join-Path $main "java"
-$namespace = "com.selflock"
+$namespace = "com.waitleisure"
 $nsDir = $namespace -replace '\.', '\'
 
 $issues = New-Object System.Collections.Generic.List[string]
@@ -40,7 +40,7 @@ $checks = 0
 function Add-Issue([string]$m) { $script:issues.Add($m) | Out-Null }
 function Rel([string]$full) { return $full.Substring($script:root.Length).TrimStart('\') }
 
-Write-Output "=== SelfLock 静态校验 ==="
+Write-Output "=== WaitLeisure 静态校验 ==="
 Write-Output ("工程根目录: " + $root)
 Write-Output ""
 
@@ -230,7 +230,7 @@ Write-Output ("检查了 " + $ktFiles.Count + " 个 Kotlin 文件")
 Write-Output ""
 
 # ---------------------------------------------------------------- 5. 内部 import 可解析
-Write-Output "--- [5/7] import com.selflock.* 可解析 ---"
+Write-Output "--- [5/7] import com.waitleisure.* 可解析 ---"
 # 预扫描：按「包目录」收集该包下所有文件里出现过的标识符
 $declCache = @{}
 foreach ($f in $ktFiles) {
@@ -250,7 +250,7 @@ foreach ($f in $ktFiles) {
 $importCount = 0
 foreach ($f in $ktFiles) {
     $raw = Read-Text $f.FullName
-    foreach ($m in [regex]::Matches($raw, '(?m)^\s*import\s+(com\.selflock\.[A-Za-z0-9_\.]+)\s*$')) {
+    foreach ($m in [regex]::Matches($raw, '(?m)^\s*import\s+(com\.waitleisure\.[A-Za-z0-9_\.]+)\s*$')) {
         $importCount++
         $fq = $m.Groups[1].Value
         if ($fq -eq ($namespace + ".R") -or $fq.StartsWith($namespace + ".R.")) { continue }  # R 由编译器生成
@@ -268,7 +268,7 @@ foreach ($f in $ktFiles) {
         # 情况 B：该包目录下某个文件声明了这个标识符
         if (-not $ok -and $declCache.ContainsKey($pkg) -and $declCache[$pkg].Contains($simple)) { $ok = $true }
 
-        # 情况 C：父包下的嵌套符号（如 com.selflock.model.Schedule.Companion）
+        # 情况 C：父包下的嵌套符号（如 com.waitleisure.model.Schedule.Companion）
         if (-not $ok -and $parts.Count -ge 2) {
             $parentPkg = ($parts[0..($parts.Count - 3)] -join '.')
             $parentSym = $parts[-2]
@@ -401,7 +401,7 @@ foreach ($f in $ktFiles) {
         if ($typeToPkg[$t] -eq $pkg) { continue }
         if ($imported.Contains($t)) { continue }
         # (?<![\w.]) 排除「限定名」里的同名词 —— 例如 Screen.Permissions 里的
-        # Permissions 是枚举值，跟 com.selflock.util.Permissions 这个工具类没关系，
+        # Permissions 是枚举值，跟 com.waitleisure.util.Permissions 这个工具类没关系，
         # 用 \b 会把后者也匹配进来，产生误报。
         if ($body -cmatch ('(?<![\w.])' + [regex]::Escape($t) + '\b')) {
             $importChecks++

@@ -1,6 +1,6 @@
-# SelfLock · 安卓锁机 App（L1）
+# 等闲 · WaitLeisure
 
-全局锁机 + 自定义白名单 + 每日定时。个人自用 / 学习项目。
+全局锁机 + 自定义白名单 + 定时任务 + 番茄钟。个人自用 / 学习项目。
 
 **全部代码为原创净室实现**，未使用、未参考任何第三方 APK 的反编译产物。
 
@@ -10,62 +10,86 @@
 
 | 需求 | 实现方式 |
 |---|---|
-| **全局锁机** | 锁机期间，`LockScreenActivity` 成为唯一的「桌面」。按 Home 键、从最近任务切回来，都会被无障碍服务立刻弹回锁机页 |
+| **全局锁机** | 锁机期间，全屏悬浮窗 + `LockScreenActivity` 成为唯一的「桌面」。按 Home 键、从最近任务切回来，都会被无障碍服务立刻弹回锁机页 |
 | **只留白名单可用** | 无障碍服务监听前台应用切换，凡不在白名单里的包名一律拦截；锁机页上只列出白名单应用的图标，点一下就能正常用 |
-| **白名单可自定义** | 白名单页列出所有带桌面图标的应用，勾选即生效，写入 SharedPreferences |
-| **每日定时** | 每条规则 = 起始时间 + 持续时长 + 重复星期。用 `AlarmManager.setExactAndAllowWhileIdle` 精确触发，触发后自动排下一天 |
+| **白名单** | 全局白名单（永远放行）+ 若干**分组**。分组就是「一套应用」，**不带时间限制** —— 什么时候放行哪一组，由定时规则决定 |
+| **任务** | 预设好的锁法，分两类：*简单锁机*（锁一段固定时长）/ *番茄钟*（专注与休息自动轮转）。首页两张卡片和定时规则的「执行任务」**共用同一套任务**，常用锁法只配一次 |
+| **每日定时** | 每条规则 = 起始时间 +（自带时长 **或** 执行某个任务）+ 重复星期 + 节假日策略 + 可选的白名单分组。用 `AlarmManager.setExactAndAllowWhileIdle` 精确触发 |
+| **法定节假日** | 内置国务院公告的放假 / 调休表，规则可选「跳过法定节假日」或「仅在法定节假日」 |
+| **番茄钟** | 专注时段自动锁机、休息时段自动解锁，按「循环次数 × 专注时长」轮转；休息分短休 / 长休 |
+| **锁机页** | 三页横向滑动（时间 / 白名单应用 / 退出），背景支持纯色或自定义图片 + 高斯模糊；自绘状态栏，可从顶部下拉展开通知栏 |
 
-附加：解锁 PIN、立即锁机、开机自动恢复定时、设备管理员防卸载。
+附加：解锁 PIN（可一键随机生成 4 位）、开机自动恢复定时、设备管理员防卸载。
 
 ---
 
 ## 二、目录结构
 
 ```
-SelfLock/
+WaitLeisure/
 ├── settings.gradle.kts
 ├── build.gradle.kts
 ├── gradle.properties
 ├── gradle/wrapper/gradle-wrapper.properties
+├── .github/workflows/release.yml        打 tag 自动出包
+├── tools/verify.ps1                     静态校验（编译前预检）
 └── app/
-    ├── build.gradle.kts
-    ├── proguard-rules.pro
+    ├── build.gradle.kts                 namespace / applicationId / versionName
     └── src/main/
         ├── AndroidManifest.xml
         ├── res/
         │   ├── values/{strings,themes,colors}.xml
+        │   ├── values-en/strings.xml           英文名 WaitLeisure
         │   ├── xml/{accessibility_service_config,device_admin}.xml
-        │   ├── drawable/{ic_launcher_foreground,ic_stat_lock}.xml
-        │   └── mipmap-anydpi-v26/{ic_launcher,ic_launcher_round}.xml
-        └── java/com/selflock/
-            ├── SelfLockApp.kt              Application，初始化仓储 + 通知渠道
-            ├── MainActivity.kt             主界面宿主
-            ├── model/Schedule.kt           定时规则模型 + 格式化工具
+        │   ├── drawable-nodpi/ic_launcher_foreground.png   玫瑰线稿前景
+        │   ├── drawable/ic_stat_lock.xml       通知栏剪影
+        │   └── mipmap-*/                       自适应图标 + 5 档光栅图标
+        ├── keepRules/rules.keep
+        └── java/com/waitleisure/
+            ├── WaitLeisureApp.kt            Application，初始化仓储 + 通知渠道
+            ├── MainActivity.kt              主界面宿主
+            ├── model/
+            │   ├── Schedule.kt              定时规则模型 + 格式化工具
+            │   ├── Task.kt                  任务（预设锁法）
+            │   └── HolidayCalendar.kt       内置法定节假日表
             ├── data/
-            │   ├── AppPrefs.kt             唯一落盘入口
-            │   ├── Repos.kt                极简服务定位器
+            │   ├── AppPrefs.kt              唯一落盘入口
+            │   ├── Repos.kt                 极简服务定位器
             │   ├── WhitelistRepository.kt
+            │   ├── WhitelistGroup.kt        分组（纯应用集合，不带时间）
             │   ├── ScheduleRepository.kt
-            │   ├── LockStateRepository.kt  「现在是否锁定」的唯一真相
+            │   ├── TaskRepository.kt        任务增删改查 + 预置种子
+            │   ├── LockStateRepository.kt   「现在是否锁定」的唯一真相
             │   └── InstalledAppsRepository.kt
             ├── lock/
             │   ├── LockAccessibilityService.kt   软锁核心：拦截非白名单
-            │   ├── LockScreenActivity.kt          锁机页（= 锁定期间的桌面）
-            │   ├── LockForegroundService.kt       常驻通知 + 到点自动收摊
-            │   ├── LockController.kt              锁/解锁的统一入口
-            │   └── DeviceAdminReceiver.kt         防卸载
+            │   ├── LockOverlay.kt                全屏悬浮窗（锁机页的本体）
+            │   ├── LockScreenActivity.kt         锁机页 Activity（点亮屏幕那一层）
+            │   ├── LockForegroundService.kt      常驻通知 + 看门狗 + 到点收摊
+            │   ├── LockController.kt             锁/解锁的统一入口
+            │   ├── Pomodoro.kt                   番茄钟相位推进
+            │   └── DeviceAdminReceiver.kt        防卸载
             ├── alarm/
             │   ├── AlarmScheduler.kt          排闹钟 / 算下一次触发时刻
             │   ├── ScheduleAlarmReceiver.kt   定时触发点
+            │   ├── ScheduleRunner.kt          执行一条规则（自带时长 / 执行任务）
             │   └── BootReceiver.kt            开机 / 时间变更后重建闹钟
             ├── ui/
-            │   ├── SelfLockNavHost.kt         底部导航 + NavHost
-            │   ├── HomeScreen.kt              状态 + 权限体检 + PIN
-            │   ├── WhitelistScreen.kt
-            │   ├── ScheduleScreens.kt         列表 + 编辑
-            │   └── Components.kt
+            │   ├── AppNavHost.kt              底部导航 + 路由
+            │   ├── HomeScreen.kt              状态卡 + 两张动作卡 + 使用提示
+            │   ├── PermissionScreen.kt        加固权限体检表 + 诊断日志
+            │   ├── WhitelistScreen.kt         全局白名单 + 分组总览
+            │   ├── AppPickerScreen.kt         应用选择（大图标 / 列表）
+            │   ├── ScheduleScreens.kt         定时列表 + 编辑
+            │   ├── TaskScreens.kt             任务列表 + 编辑 + 选择框
+            │   ├── SettingsScreen.kt          分类分级的设置项
+            │   ├── DurationPicker.kt          时分两列滚轮，1 分钟精度
+            │   └── Components.kt              应用图标缓存等公共组件
             └── util/
+                ├── CoreAllowed.kt             输入法 / 系统界面 / 拨号盘永远放行
                 ├── Permissions.kt             权限体检与引导跳转
+                ├── ForegroundDetector.kt      使用情况访问兜底
+                ├── DiagLog.kt                 环形诊断日志（同时打 logcat）
                 ├── Notifications.kt
                 └── Pin.kt
 ```
@@ -92,13 +116,13 @@ gradle wrapper --gradle-version 8.11.1
 之后就能用 `./gradlew` 了。
 
 #### 方式 B：Android Studio 直接同步
-1. `File → Open`，选中 `SelfLock` 目录
+1. `File → Open`，选中 `等闲` 目录
 2. 如果提示 wrapper 缺失，打开 `Settings → Build, Execution, Deployment → Build Tools → Gradle`
 3. 把 **Use Gradle from** 改成 **Specified location**，指向你本机已装的 Gradle，或选 Android Studio 自带的 distribution
 4. `Sync Project with Gradle Files`
 
 #### 方式 C：最稳的兜底（推荐新手）
-1. Android Studio 新建一个 **Empty Activity (Compose)** 工程，包名 `com.selflock`，`minSdk 26`
+1. Android Studio 新建一个 **Empty Activity (Compose)** 工程，包名 `com.waitleisure`，`minSdk 26`
 2. 用本工程的 `app/src/`、`app/build.gradle.kts`、`AndroidManifest.xml` **覆盖**新工程里的同名内容
 3. 同步、运行
 
@@ -179,12 +203,12 @@ gradle wrapper --gradle-version 8.11.1
 
 | 设置 | 路径 | 为什么必须做 |
 |---|---|---|
-| **后台弹出界面** ⭐⭐ | 设置 → 应用设置 → 应用管理 → SelfLock → 权限管理 → **其他权限** → **后台弹出界面** → 允许 | **最关键的一项。** 没有它，无障碍服务检测到非白名单应用后，**无法把锁机页拉到前台**，拦截会静默失败。这是 MIUI/HyperOS 独有的一道闸 |
-| **自启动** | 设置 → 应用设置 → 应用管理 → SelfLock → **自启动** → 打开 | 开机后定时闹钟才能重建 |
-| **省电策略 → 无限制** | 设置 → 应用设置 → 应用管理 → SelfLock → **省电策略** → 无限制 | 否则息屏后进程被冻结，定时锁机不触发 |
-| **锁定后台任务** | 进入最近任务 → 找到 SelfLock 卡片 → 下拉（或长按）→ 点**小锁**图标 | 防止「一键清理」把它杀掉 |
-| **通知权限** | 设置 → 应用设置 → 应用管理 → SelfLock → 通知管理 → 允许 | 锁机常驻通知才可见 |
-| **无障碍服务** | 设置 → 更多设置 → 无障碍 → 已下载的服务 → **SelfLock 锁机服务** → 打开 | 锁机的地基 |
+| **后台弹出界面** ⭐⭐ | 设置 → 应用设置 → 应用管理 → 等闲 → 权限管理 → **其他权限** → **后台弹出界面** → 允许 | **最关键的一项。** 没有它，无障碍服务检测到非白名单应用后，**无法把锁机页拉到前台**，拦截会静默失败。这是 MIUI/HyperOS 独有的一道闸 |
+| **自启动** | 设置 → 应用设置 → 应用管理 → 等闲 → **自启动** → 打开 | 开机后定时闹钟才能重建 |
+| **省电策略 → 无限制** | 设置 → 应用设置 → 应用管理 → 等闲 → **省电策略** → 无限制 | 否则息屏后进程被冻结，定时锁机不触发 |
+| **锁定后台任务** | 进入最近任务 → 找到 等闲 卡片 → 下拉（或长按）→ 点**小锁**图标 | 防止「一键清理」把它杀掉 |
+| **通知权限** | 设置 → 应用设置 → 应用管理 → 等闲 → 通知管理 → 允许 | 锁机常驻通知才可见 |
+| **无障碍服务** | 设置 → 更多设置 → 无障碍 → 已下载的服务 → **等闲 锁机服务** → 打开 | 锁机的地基 |
 
 > 💡 **HyperOS 的设置项名称在不同小版本会变。最快的方法是在「设置」顶部的搜索框直接搜关键词**：
 > `后台弹出界面`、`自启动`、`省电策略`、`无障碍`。
@@ -193,7 +217,7 @@ gradle wrapper --gradle-version 8.11.1
 #### 两个已知的 HyperOS 行为
 
 1. **系统更新后「省电策略」可能被重置。**
-   如果发现锁机用了一段时间后开始失灵：手机管家 → 应用管理 → SelfLock → 确认省电策略仍是「无限制」。
+   如果发现锁机用了一段时间后开始失灵：手机管家 → 应用管理 → 等闲 → 确认省电策略仍是「无限制」。
 
 2. **锁机期间 MIUI 的系统弹窗会被一并拦住。**
    这是刻意的 —— 比如「系统更新提示」「低电量提醒」弹出时会被弹回锁机页。
@@ -213,7 +237,7 @@ gradle wrapper --gradle-version 8.11.1
 
 从锁机页点白名单应用时，MIUI/HyperOS 会先弹一个确认框：
 
-> SelfLock 想要打开 XX，是否允许？　　　[本次允许] [始终允许] [拒绝]
+> 等闲 想要打开 XX，是否允许？　　　[本次允许] [始终允许] [拒绝]
 
 **这个框一度会被本 App 自己秒关掉。** 原因：它属于系统/安全中心，包名不在白名单里，
 无障碍服务把它当成「非白名单应用」，立刻把锁机页拉回前台 —— 用户根本来不及点。
@@ -225,7 +249,7 @@ gradle wrapper --gradle-version 8.11.1
 猜错了就白改。用时间窗口绕过包名识别，最稳。
 
 **你还可以一劳永逸**：在那个确认框弹出时直接点 **「始终允许」**，每个应用只需点一次，
-之后不再弹。或者去系统设置里给 SelfLock 放行「关联启动 / 链式启动」。
+之后不再弹。或者去系统设置里给 等闲 放行「关联启动 / 链式启动」。
 
 路径关键词（HyperOS 各版本名称不同，**用设置顶部的搜索框搜最快**）：
 
@@ -288,7 +312,7 @@ LockAccessibilityService.onAccessibilityEvent()
 2. 安装本 App 的 debug 包
 3. 用电脑执行：
    ```bash
-   adb shell dpm set-device-owner com.selflock/.lock.DeviceAdminReceiver
+   adb shell dpm set-device-owner com.waitleisure/.lock.DeviceAdminReceiver
    ```
 4. 成功后即可在代码里使用：
    - `dpm.setLockTaskPackages(admin, arrayOf(白名单包名))` —— 系统级白名单
@@ -312,7 +336,7 @@ LockAccessibilityService.onAccessibilityEvent()
 用来在编译前抓出那些「人眼容易漏、但编译器一定会报」的问题：
 
 ```powershell
-$env:SELFLOCK_ROOT = "<工程根目录>"
+$env:WAITLEISURE_ROOT = "<工程根目录>"
 powershell -ExecutionPolicy Bypass -File "<工程根目录>\tools\verify.ps1"
 
 > 若提示「无法加载文件……未进行数字签名」，那是 PowerShell 默认的 Restricted 执行策略所致，
@@ -332,9 +356,9 @@ powershell -ExecutionPolicy Bypass -File "<工程根目录>\tools\verify.ps1"
 | 2 | Manifest 组件 | 声明了 `.lock.Foo` 却没有 `Foo.kt`；或类没继承正确的基类（Activity / Service / BroadcastReceiver） |
 | 3 | R 资源引用 | `R.string.xxx` / `@string/xxx` 指向不存在的资源 |
 | 4 | package 与目录 | Kotlin 包名和目录层级对不上 |
-| 5 | 内部 import | `import com.selflock.a.b.C` 在源码里解析不到 |
+| 5 | 内部 import | `import com.waitleisure.a.b.C` 在源码里解析不到 |
 | 6 | **自有类型成员** | `Schedule` 上不存在的属性、`Repos.whitelist.toggleXYZ()` 这类链式调用打错（**这是最接近"编译器级"的一类检查**） |
-| 7 | **跨包类型 import** | 用了 `com.selflock.util.Pin` 却忘了写 `import` |
+| 7 | **跨包类型 import** | 用了 `com.waitleisure.util.Pin` 却忘了写 `import` |
 
 ### ⚠️ 关于编码（踩过的坑）
 
@@ -383,7 +407,7 @@ Windows PowerShell 5.1 在没有 BOM 时会按系统 ANSI 代码页（GBK）读�
 
 | 原本会用 | 改成 | 原因 |
 |---|---|---|
-| `androidx.navigation` 的 `NavHost` | `SelfLockNavHost.kt` 里用 `when` + `mutableStateOf` 手写路由 | 只有 4 个页面，不值得多引一个依赖。附带好处：离开的页面会被 dispose，回来时 `LaunchedEffect(Unit)` 重跑，正好用来刷新权限状态 |
+| `androidx.navigation` 的 `NavHost` | `AppNavHost.kt` 里用 `when` + `mutableStateOf` 手写路由 | 只有 4 个页面，不值得多引一个依赖。附带好处：离开的页面会被 dispose，回来时 `LaunchedEffect(Unit)` 重跑，正好用来刷新权限状态 |
 | `lifecycle-runtime-compose` 的 `LifecycleEventEffect` | `LaunchedEffect(Unit)` + 手动「重新检测」按钮 | 少一个依赖 |
 | `material-icons` 的图标 | 导航图标改用 BMP 区字符（`\u2302` / `\u2630` / `\u23F0`）；锁机页和删除按钮改用文字 | 该 artifact 已废弃；同时让源码保持纯 ASCII，规避编码问题 |
 
@@ -399,27 +423,35 @@ Windows PowerShell 5.1 在没有 BOM 时会按系统 ANSI 代码页（GBK）读�
 
 ---
 
-## 十一、版本号自动化
+## 十一、版本号
 
-`app/build.gradle.kts` 里的版本号**从 git 自动派生**，每次提交自动递增，不需要手动改任何文件：
+`app/build.gradle.kts` 里：
 
-| 字段 | 取值 | 例子 |
+| 字段 | 取值方式 | 当前 |
 |---|---|---|
-| `versionCode` | 仓库提交总数（`git rev-list --count HEAD`） | `7` |
-| `versionName` | `1.0.<提交数>` | `1.0.9` |
+| `versionCode` | **自动**：仓库提交总数（`git rev-list --count HEAD`） | 每次提交 +1 |
+| `versionName` | **手写**的里程碑号 | `2.1.0` |
 
-好处：
+`versionCode` 从 git 派生，不用手动改任何文件，而且严格单调递增，满足 Android 对覆盖安装的要求。
 
-- `versionCode` 严格单调递增，满足 Android 对覆盖安装的要求
-- 从版本号就能直接对上是哪一次提交，排查问题时不用猜
+**取不到 git 时自动退回 `versionCode = 1`，不会因此让构建失败**（比如把 ZIP 解压出来直接构建，或机器上没装 git）。
+用 `providers.exec` 而不是 `Runtime.exec`：前者是配置缓存安全的写法，Gradle 会把命令输出纳入配置缓存的指纹，所以提交之后版本号一定会跟着变。
 
-**取不到 git 时自动退回 `versionCode = 1` / `versionName = "1.0.1"`，不会因此让构建失败**
-（比如把 ZIP 解压出来直接构建，或机器上没装 git）。
+### Release 从哪来
 
-用 `providers.exec` 而不是 `Runtime.exec`：前者是配置缓存安全的写法，
-Gradle 会把命令输出纳入配置缓存的指纹，所以提交之后版本号一定会跟着变。
+打 tag 即可，GitHub Actions 会自动构建并发布：
 
-如果你想手动控制版本号，把 `defaultConfig` 里那两行改回常量即可。
+```bash
+git tag v2.1.0
+git push origin v2.1.0
+```
+
+`.github/workflows/release.yml` 会跑 `:app:assembleRelease` + 单元测试，
+把 `app-release.apk` 传成 `WaitLeisure-<versionName>.apk` 并创建 Release。
+
+**签名用的是 debug keystore**（`signingConfig = signingConfigs.getByName("debug")`）。
+这是个自用 / 侧载项目，用正式 keystore 反而带来「keystore 丢了就再也签不出能覆盖安装的包」的风险。
+真要上架时把 `app/build.gradle.kts` 里那一行换成自己的 `signingConfig` 即可。
 
 > **版本名里为什么不带 commit hash？**
 >
@@ -427,5 +459,22 @@ Gradle 会把命令输出纳入配置缓存的指纹，所以提交之后版本�
 > `+` 在 URL 和文件名里会被百分号编码成 `%2B`，下载下来像乱码；
 > 而且本地改了文件还没提交时，hash 显示的也是上一次提交，本身就不准。
 >
-> 现在提交号只用来算 `versionCode`，不再进版本名。
-> 想查某个包对应哪次提交，看 Release 的 tag 即可。
+> 现在提交号只用来算 `versionCode`，不再进版本名。想查某个包对应哪次提交，看 Release 的 tag 即可。
+
+---
+
+## 十二、包名迁移说明
+
+`2.1.0` 把包名从 `com.selflock` 改成了 **`com.waitleisure`**，中英文名统一为 **等闲 / WaitLeisure**。
+
+这意味着：
+
+- 它是一个**全新的 App**，不会覆盖安装、也不会自动卸载旧的 `com.selflock`
+- 旧包里的配置（白名单、定时规则、分组、任务）**不会带过来**，需要重配一次
+- 无障碍服务要重新授权一次（包名变了，系统里的服务项是新的）
+
+旧的可以直接卸载：
+
+```bash
+adb uninstall com.selflock
+```

@@ -1,7 +1,7 @@
 name: Release
 
 # 打 tag 就自动构建并发布 Release：
-#   git tag v1.0.7 && git push origin v1.0.7
+#   git tag v2.1.0 && git push origin v2.1.0
 #
 # 也可以在 Actions 页面手动触发（workflow_dispatch）。手动触发不创建 Release，
 # 只把 APK 传成 workflow artifact，方便先单独验证构建能不能过。
@@ -23,7 +23,7 @@ jobs:
       # runner 在海外，直连 google()/mavenCentral() 更快更稳。
       # 开着阿里云镜像反而可能超时 —— Gradle 是「仓库里找不到才换下一个」，
       # 超时不会自动降级，所以这里必须显式关掉镜像。
-      SELFLOCK_NO_CN_MIRRORS: "1"
+      WAITLEISURE_NO_CN_MIRRORS: "1"
 
     steps:
       - name: Checkout
@@ -42,13 +42,19 @@ jobs:
       - name: Grant execute permission for gradlew
         run: chmod +x ./gradlew
 
-      - name: Build debug APK
-        run: ./gradlew :app:assembleDebug --no-daemon --stacktrace
+      # Release 变体在 build.gradle.kts 里配了 signingConfig = debug，
+      # 所以这里产出的就是**已签名的可安装包**。
+      # AGP 会在缺失时自动生成 ~/.android/debug.keystore，CI 上同样适用。
+      - name: Build release APK
+        run: ./gradlew :app:assembleRelease --no-daemon --stacktrace
+
+      - name: Run unit tests
+        run: ./gradlew :app:testDebugUnitTest --no-daemon --stacktrace
 
       - name: Read version from APK metadata
         id: ver
         run: |
-          META=app/build/outputs/apk/debug/output-metadata.json
+          META=app/build/outputs/apk/release/output-metadata.json
           echo "--- output-metadata.json ---"
           cat "$META"
           CODE=$(python3 -c "import json;print(json.load(open('$META'))['elements'][0]['versionCode'])")
@@ -60,13 +66,13 @@ jobs:
       - name: Collect APK
         run: |
           mkdir -p out
-          cp app/build/outputs/apk/debug/app-debug.apk "out/SelfLock-${{ steps.ver.outputs.name }}.apk"
+          cp app/build/outputs/apk/release/app-release.apk "out/WaitLeisure-${{ steps.ver.outputs.name }}.apk"
           ls -lh out/
 
       - name: Upload as workflow artifact
         uses: actions/upload-artifact@v4
         with:
-          name: SelfLock-apk
+          name: WaitLeisure-apk
           path: out/*.apk
 
       - name: Write release notes
@@ -76,6 +82,8 @@ jobs:
             echo
             echo "| | |"
             echo "|---|---|"
+            echo "| 应用 | 等闲 · WaitLeisure |"
+            echo "| 包名 | \`com.waitleisure\` |"
             echo "| versionCode | \`${{ steps.ver.outputs.code }}\` |"
             echo "| versionName | \`${{ steps.ver.outputs.name }}\` |"
             echo "| 签名 | debug（仅供自用/侧载，请勿上架商店） |"
@@ -83,10 +91,14 @@ jobs:
             echo "### 安装"
             echo
             echo '```bash'
-            echo "adb install -r SelfLock-*.apk"
+            echo "adb install -r WaitLeisure-*.apk"
             echo '```'
             echo
-            echo "首次使用请按 README 第四节完成 5 项权限授权。"
+            echo "> **换了包名**：从 \`com.selflock\` 改成 \`com.waitleisure\`。"
+            echo "> 这是一个全新的 App，旧的 SelfLock 不会自动升级/卸载，请手动卸载；"
+            echo "> 旧的配置（白名单、定时规则、分组、任务）也不会带过来，需要重配一次。"
+            echo
+            echo "首次使用请按 README 第四节完成权限授权。"
             echo "小米 / 红米（HyperOS）特别注意 **「后台弹出界面」**，不授权锁机页拉不起来。"
           } > RELEASE_NOTES.md
           cat RELEASE_NOTES.md
@@ -97,5 +109,5 @@ jobs:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           gh release create "${GITHUB_REF_NAME}" out/*.apk \
-            --title "SelfLock ${GITHUB_REF_NAME}" \
+            --title "等闲 WaitLeisure ${GITHUB_REF_NAME}" \
             --notes-file RELEASE_NOTES.md

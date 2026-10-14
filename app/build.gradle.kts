@@ -4,18 +4,13 @@ plugins {
 }
 
 // ---------------------------------------------------------------------------
-// 版本号自动从 git 派生 —— 每次 git commit 自动 +1，不需要手动改任何文件
+// 版本号
 //
-//   versionCode = 仓库提交总数（单调递增，满足 Android 对 versionCode 的要求）
-//   versionName = 1.0.<提交数>              例如 1.0.8
+//   versionCode = 仓库提交总数（单调递增，满足 Android 对 versionCode 的要求，自动 +1）
+//   versionName = 手写的里程碑号，例如 2.1.0
 //
-// 刻意不把 commit hash 塞进版本名，理由：
-//   1. Release 的 tag（v1.0.8）已经指向确定的提交，hash 是冗余信息；
-//   2. 本地改了文件还没提交时，hash 显示的也是「上一次提交」，本身就不准；
-//   3. 代价却是「设置 → 应用」里那一行被撑长，而且 `+` 这类字符在 URL 和文件名里
-//      会被百分号编码成 %2B，看着像乱码（早期版本正是踩了这个坑）。
-//
-// 取不到 git 时（没装 git / 不是仓库 / 从 ZIP 解压得到）退回 1，绝不因此让构建失败。
+// versionCode 刻意从 git 派生，不用手动改任何文件；取不到 git 时（没装 git / 不是仓库 /
+// 从 ZIP 解压得到）退回 1，绝不因此让构建失败。
 // 用 providers.exec 而不是 Runtime.exec：前者是配置缓存安全的写法，
 // Gradle 会把命令输出纳入配置缓存的指纹，所以提交后版本号一定会跟着变。
 // ---------------------------------------------------------------------------
@@ -27,25 +22,30 @@ val gitCommitCount: Int = runCatching {
 }.getOrDefault(1)
 
 android {
-    namespace = "com.selflock"
+    namespace = "com.waitleisure"
     compileSdk {
         version = release(37)
     }
 
     defaultConfig {
-        applicationId = "com.selflock"
+        applicationId = "com.waitleisure"
         minSdk = 26
         targetSdk = 37
         versionCode = gitCommitCount
-        // 2.0 正式里程碑，versionName 固定为 2.0.0（不再带提交数后缀）。
-        // versionCode 仍用 gitCommitCount，保证覆盖安装时数值单调递增。
-        versionName = "2.0.0"
+        versionName = "2.1.0"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
 
     buildTypes {
         release {
+            // Release 直接复用 debug 签名。
+            //
+            // 这是个自用/侧载项目，不上架商店 —— 用正式 keystore 反而带来
+            // 「keystore 丢了就再也签不出能覆盖安装的包」的风险。
+            // 真要上架时把这里换成自己的 signingConfig 即可。
+            // AGP 会在缺失时自动生成 ~/.android/debug.keystore，CI 上同样适用。
+            signingConfig = signingConfigs.getByName("debug")
             optimization {
                 enable = true
                 packageScope = setOf("androidx.**", "kotlin.**", "kotlinx.**")

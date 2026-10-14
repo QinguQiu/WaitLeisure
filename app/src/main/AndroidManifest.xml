@@ -77,13 +77,13 @@
     </queries>
 
     <application
-        android:name=".SelfLockApp"
+        android:name=".WaitLeisureApp"
         android:allowBackup="false"
         android:icon="@mipmap/ic_launcher"
         android:label="@string/app_name"
         android:roundIcon="@mipmap/ic_launcher_round"
         android:supportsRtl="true"
-        android:theme="@style/Theme.SelfLock">
+        android:theme="@style/Theme.WaitLeisure">
 
         <activity
             android:name=".MainActivity"
@@ -106,7 +106,7 @@
             android:exported="false"
             android:launchMode="singleInstance"
             android:taskAffinity=""
-            android:theme="@style/Theme.SelfLock.Lock"
+            android:theme="@style/Theme.WaitLeisure.Lock"
             tools:targetApi="27" />
 
 
