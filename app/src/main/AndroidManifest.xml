@@ -41,6 +41,13 @@
     <uses-permission android:name="android.permission.VIBRATE" />
 
     <!--
+      锁机页自己画了一条状态栏（时间 / 网络 / 电量）：悬浮窗铺满全屏之后
+      系统状态栏的图标不再绘制，只能自己补齐。读网络类型需要这个权限 ——
+      它是 normal 级，安装即授予，不会弹框。
+    -->
+    <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
+
+    <!--
       只查询「有启动图标」的应用，读取白名单候选列表已经够用。
       刻意不使用 QUERY_ALL_PACKAGES —— 权限更小，且在 Google Play 上不会触发政策审查。
     -->

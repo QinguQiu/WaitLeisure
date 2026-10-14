@@ -1,8 +1,13 @@
 package com.selflock.lock
 
+import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
+import android.content.IntentFilter
 import android.graphics.BitmapFactory
+import android.net.ConnectivityManager
+import android.net.NetworkCapabilities
+import android.os.BatteryManager
 import android.os.Build
 import android.os.Bundle
 import android.view.WindowInsetsController
@@ -19,11 +24,14 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.asPaddingValues
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.statusBars
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
@@ -39,9 +47,11 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.darkColorScheme
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.produceState
 import androidx.compose.runtime.remember
@@ -60,6 +70,7 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.core.content.ContextCompat
 import androidx.core.graphics.drawable.toBitmap
 import com.selflock.R
 import com.selflock.data.Repos
@@ -303,6 +314,14 @@ private fun LockScreen(
             }
         }
 
+        // 自绘状态栏。悬浮窗铺满全屏之后系统状态栏的图标不再绘制
+        // （实测顶部整条都是壁纸、一个图标都没有），所以这一条必须自己补。
+        // 放在分页器之后 = 画在最上层，三页都能看到。
+        OverlayStatusBar(
+            now = now,
+            modifier = Modifier.align(Alignment.TopCenter)
+        )
+
         // 页码指示点
         Row(
             modifier = Modifier
@@ -335,10 +354,114 @@ private fun LockScreen(
     }
 }
 
+/**
+ * 自绘状态栏：左边时间，右边网络类型 + 电量。
+ *
+ * 为什么要自己画：悬浮窗为了盖住状态栏区域（让壁纸连续）把窗口铺到了 y=0，
+ * 而铺满之后系统状态栏的图标就不再绘制了 —— 实测顶部整条只剩壁纸。
+ * 所以时间/网络/电量这三样必须自己补，不能再指望系统。
+ *
+ * 高度取系统状态栏的真实 inset，这样各家 ROM 的刘海/状态栏高度都能自适应；
+ * 取不到时退到 28dp。
+ */
+@Composable
+private fun OverlayStatusBar(now: Long, modifier: Modifier = Modifier) {
+    val battery = rememberBatteryPercent()
+    val network = rememberNetworkLabel(now)
+    val inset = WindowInsets.statusBars.asPaddingValues().calculateTopPadding()
+    val barHeight = if (inset > 0.dp) inset else 28.dp
+
+    Row(
+        modifier = modifier
+            .fillMaxWidth()
+            .height(barHeight)
+            .padding(horizontal = 22.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.SpaceBetween
+    ) {
+        Text(
+            text = remember(now) {
+                SimpleDateFormat("HH:mm", Locale.getDefault()).format(Date(now))
+            },
+            color = Color.White,
+            fontSize = 14.sp,
+            fontWeight = FontWeight.Medium
+        )
+
+        Row(
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(8.dp)
+        ) {
+            if (network.isNotEmpty()) {
+                Text(
+                    text = network,
+                    color = Color.White.copy(alpha = 0.9f),
+                    fontSize = 12.sp
+                )
+            }
+            Text(
+                text = if (battery in 0..100) "$battery%" else "--",
+                color = Color.White,
+                fontSize = 14.sp,
+                fontWeight = FontWeight.Medium
+            )
+        }
+    }
+}
+
+/** 电量百分比。ACTION_BATTERY_CHANGED 是粘性广播，注册时就能拿到当前值。 */
+@Composable
+private fun rememberBatteryPercent(): Int {
+    val context = LocalContext.current
+    var percent by remember { mutableIntStateOf(-1) }
+
+    DisposableEffect(context) {
+        val receiver = object : BroadcastReceiver() {
+            override fun onReceive(c: Context?, intent: Intent?) {
+                val level = intent?.getIntExtra(BatteryManager.EXTRA_LEVEL, -1) ?: -1
+                val scale = intent?.getIntExtra(BatteryManager.EXTRA_SCALE, -1) ?: -1
+                if (level >= 0 && scale > 0) percent = level * 100 / scale
+            }
+        }
+        val sticky = runCatching {
+            ContextCompat.registerReceiver(
+                context,
+                receiver,
+                IntentFilter(Intent.ACTION_BATTERY_CHANGED),
+                ContextCompat.RECEIVER_NOT_EXPORTED
+            )
+        }.getOrNull()
+        val level = sticky?.getIntExtra(BatteryManager.EXTRA_LEVEL, -1) ?: -1
+        val scale = sticky?.getIntExtra(BatteryManager.EXTRA_SCALE, -1) ?: -1
+        if (level >= 0 && scale > 0) percent = level * 100 / scale
+
+        onDispose { runCatching { context.unregisterReceiver(receiver) } }
+    }
+    return percent
+}
+
+/** 网络类型。跟着 now 每秒重算，连断网也能及时反映。 */
+@Composable
+private fun rememberNetworkLabel(now: Long): String {
+    val context = LocalContext.current
+    return remember(now) {
+        runCatching {
+            val cm = context.getSystemService(ConnectivityManager::class.java)
+            val caps = cm?.let { it.getNetworkCapabilities(it.activeNetwork) }
+            when {
+                caps == null -> "无网络"
+                caps.hasTransport(NetworkCapabilities.TRANSPORT_WIFI) -> "WiFi"
+                caps.hasTransport(NetworkCapabilities.TRANSPORT_CELLULAR) -> "移动网络"
+                caps.hasTransport(NetworkCapabilities.TRANSPORT_ETHERNET) -> "有线"
+                else -> ""
+            }
+        }.getOrDefault("")
+    }
+}
+
 /** 第一页：时间 + 倒计时。背景保持清晰。 */
 @Composable
-private fun TimePage(now: Long) {
-    Column(
+private fun TimePage(now: Long) {    Column(
         modifier = Modifier
             .fillMaxSize()
             .padding(horizontal = 24.dp),
