@@ -7,6 +7,7 @@ import android.content.Intent
 import android.os.Build
 import com.selflock.data.Repos
 import com.selflock.model.Schedule
+import com.selflock.model.matchesDate
 import java.time.LocalDateTime
 import java.time.LocalTime
 import java.time.ZoneId
@@ -66,9 +67,11 @@ object AlarmScheduler {
     /**
      * 计算下一次触发时刻。
      *
-     * - 选了星期：从今天起最多往后找 8 天，足以覆盖「每周只选一天」。
      * - 没选星期（**单次**）：只在下一个该时刻触发一次 ——
-     *   今天还没到就今天，已经过了就明天。
+     *   今天还没到就今天，已经过了就明天。单次刻意不看节假日模式：
+     *   用户说「就这个点锁一次」，那就锁一次。
+     * - 选了星期：从今天起最多往后找 8 天，每一天都交给
+     *   [Schedule.matchesDate] 判断（它会叠加节假日模式）。
      */
     fun nextTriggerMillis(schedule: Schedule, now: LocalDateTime = LocalDateTime.now()): Long? {
         val zone = ZoneId.systemDefault()
@@ -84,9 +87,11 @@ object AlarmScheduler {
             return null
         }
 
-        for (offset in 0..7L) {
+        // 往后找 15 天而不是 8 天：节假日模式下可能出现「连续 9 天春节 + 调休」
+        // 这种长空档，窗口太短会算不出下一次。
+        for (offset in 0..14L) {
             val date = now.toLocalDate().plusDays(offset)
-            if (date.dayOfWeek.value !in schedule.days) continue
+            if (!schedule.matchesDate(date)) continue
             val candidate = LocalDateTime.of(date, time)
             if (candidate.isAfter(now)) {
                 return candidate.atZone(zone).toInstant().toEpochMilli()

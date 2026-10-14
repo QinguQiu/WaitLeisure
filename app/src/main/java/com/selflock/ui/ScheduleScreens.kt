@@ -44,8 +44,11 @@ import com.selflock.R
 import com.selflock.alarm.AlarmScheduler
 import com.selflock.data.Repos
 import com.selflock.model.DAY_LABELS
+import com.selflock.model.HolidayCalendar
+import com.selflock.model.HolidayMode
 import com.selflock.model.Schedule
 import com.selflock.model.describeDays
+import com.selflock.model.describeHolidayMode
 import com.selflock.model.toDurationText
 import com.selflock.model.toHhMm
 
@@ -182,6 +185,11 @@ private fun ScheduleCard(
                 Text(
                     text = buildString {
                         append(schedule.days.describeDays())
+                        schedule.describeHolidayMode()?.let {
+                            append("（")
+                            append(it)
+                            append("）")
+                        }
                         if (schedule.crossesMidnight) {
                             append(" · 次日 ")
                             append(schedule.endMinutes.toHhMm())
@@ -215,6 +223,7 @@ fun ScheduleEditScreen(scheduleId: Long, onDone: () -> Unit) {
     var startMinutes by remember { mutableIntStateOf(existing?.startMinutes ?: (23 * 60)) }
     var durationMinutes by remember { mutableIntStateOf(existing?.durationMinutes ?: (8 * 60)) }
     var days by remember { mutableStateOf(existing?.days ?: setOf(1, 2, 3, 4, 5, 6, 7)) }
+    var holidayMode by remember { mutableStateOf(existing?.holidayMode ?: HolidayMode.IGNORE) }
 
     Column(
         modifier = Modifier
@@ -297,6 +306,52 @@ fun ScheduleEditScreen(scheduleId: Long, onDone: () -> Unit) {
             }
         }
 
+        SectionCard(
+            title = "节假日",
+            subtitle = when (holidayMode) {
+                HolidayMode.IGNORE -> "只看星期几，不看节假日"
+                HolidayMode.SKIP_HOLIDAY -> "跳过法定节假日；调休上班日照锁"
+                HolidayMode.ONLY_HOLIDAY -> "只在法定节假日锁，忽略星期几"
+            }
+        ) {
+            Row(
+                horizontalArrangement = Arrangement.spacedBy(6.dp),
+                modifier = Modifier.horizontalScroll(rememberScrollState())
+            ) {
+                FilterChip(
+                    selected = holidayMode == HolidayMode.IGNORE,
+                    onClick = { holidayMode = HolidayMode.IGNORE },
+                    label = { Text("不看节假日") }
+                )
+                FilterChip(
+                    selected = holidayMode == HolidayMode.SKIP_HOLIDAY,
+                    onClick = { holidayMode = HolidayMode.SKIP_HOLIDAY },
+                    label = { Text("跳过节假日") }
+                )
+                FilterChip(
+                    selected = holidayMode == HolidayMode.ONLY_HOLIDAY,
+                    onClick = { holidayMode = HolidayMode.ONLY_HOLIDAY },
+                    label = { Text("只在节假日") }
+                )
+            }
+
+            if (holidayMode != HolidayMode.IGNORE) {
+                Spacer(Modifier.height(8.dp))
+                val latest = HolidayCalendar.latestYear
+                Text(
+                    text = if (latest == null) {
+                        "⚠️ 没有内置节假日数据，这个模式当前等同于只看星期几。"
+                    } else {
+                        "内置国务院公告数据，覆盖到 $latest 年。之后的年份会退化成只看星期几 —— " +
+                            "放假安排每年 11 月才公布次年版本，届时更新 App 即可。"
+                    },
+                    fontSize = 11.sp,
+                    lineHeight = 16.sp,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            }
+        }
+
         SectionCard(title = "生效结果", subtitle = null) {
             val end = (startMinutes + durationMinutes) % Schedule.MINUTES_PER_DAY
             Text(
@@ -313,6 +368,17 @@ fun ScheduleEditScreen(scheduleId: Long, onDone: () -> Unit) {
                     } else {
                         append("生效于：")
                         append(days.describeDays())
+                        val hm = holidayMode
+                        if (hm != HolidayMode.IGNORE) {
+                            append("（")
+                            append(
+                                when (hm) {
+                                    HolidayMode.SKIP_HOLIDAY -> "跳过法定节假日"
+                                    else -> "仅法定节假日"
+                                }
+                            )
+                            append("）")
+                        }
                     }
                 },
                 fontSize = 13.sp,
@@ -329,6 +395,7 @@ fun ScheduleEditScreen(scheduleId: Long, onDone: () -> Unit) {
                         startMinutes = startMinutes,
                         durationMinutes = durationMinutes,
                         days = days,
+                        holidayMode = holidayMode,
                         enabled = true
                     )
                     persistSchedule(context, saved)

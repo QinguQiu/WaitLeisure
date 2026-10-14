@@ -1,10 +1,26 @@
 package com.selflock.model
 
+import java.time.LocalDate
+
 /** 安装在设备上、且带桌面启动入口的应用。L1 只让用户从这些应用里挑白名单。 */
 data class AppInfo(
     val packageName: String,
     val label: String
 )
+
+/**
+ * 节假日处理方式。作用在「选中的星期几」之上。
+ */
+enum class HolidayMode {
+    /** 不看节假日，只按星期几。默认，保持和以前一致。 */
+    IGNORE,
+
+    /** 跳过法定节假日（含调休拼出来的休息日）；调休上班日照锁。 */
+    SKIP_HOLIDAY,
+
+    /** 只在法定节假日锁，忽略星期几的选择。 */
+    ONLY_HOLIDAY
+}
 
 /**
  * 一条每日锁机规则。
@@ -22,7 +38,8 @@ data class Schedule(
     val enabled: Boolean = true,
     val startMinutes: Int = 23 * 60,
     val durationMinutes: Int = 8 * 60,
-    val days: Set<Int> = setOf(1, 2, 3, 4, 5, 6, 7)
+    val days: Set<Int> = setOf(1, 2, 3, 4, 5, 6, 7),
+    val holidayMode: HolidayMode = HolidayMode.IGNORE
 ) {
     /** 当天 0 点起的结束分钟数（仅用于展示，跨天时小于 startMinutes）。 */
     val endMinutes: Int get() = (startMinutes + durationMinutes) % MINUTES_PER_DAY
@@ -37,6 +54,36 @@ data class Schedule(
 
 /** 把「0 点起的分钟数」格式化为 HH:mm。 */
 fun Int.toHhMm(): String = "%02d:%02d".format(this / 60, this % 60)
+
+/**
+ * 这条规则在某一天是否应该生效（不看 [Schedule.enabled]）。
+ *
+ * 星期几的选择和节假日处理叠加在一起，三种模式：
+ *  - [HolidayMode.IGNORE]       只认星期几
+ *  - [HolidayMode.SKIP_HOLIDAY] 法定放假日一律不锁；
+ *                               调休上班日**照锁**（哪怕它落在周末，
+ *                               因为它名义上是工作日 —— 这正是「调休」的意义）
+ *  - [HolidayMode.ONLY_HOLIDAY] 只看是不是法定放假日，忽略星期几
+ */
+fun Schedule.matchesDate(date: LocalDate): Boolean {
+    val inDays = date.dayOfWeek.value in days
+    return when (holidayMode) {
+        HolidayMode.IGNORE -> inDays
+
+        HolidayMode.SKIP_HOLIDAY ->
+            !HolidayCalendar.isHoliday(date) &&
+                (inDays || HolidayCalendar.isMakeupWorkday(date))
+
+        HolidayMode.ONLY_HOLIDAY -> HolidayCalendar.isHoliday(date)
+    }
+}
+
+/** 规则描述里那句「生效于」，把节假日模式一并说清楚。 */
+fun Schedule.describeHolidayMode(): String? = when (holidayMode) {
+    HolidayMode.IGNORE -> null
+    HolidayMode.SKIP_HOLIDAY -> "跳过法定节假日"
+    HolidayMode.ONLY_HOLIDAY -> "仅法定节假日"
+}
 
 /** 星期标签，索引 = DayOfWeek.value - 1。 */
 val DAY_LABELS = listOf("一", "二", "三", "四", "五", "六", "日")

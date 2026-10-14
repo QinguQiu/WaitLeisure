@@ -1,5 +1,6 @@
 package com.selflock.data
 
+import com.selflock.model.HolidayMode
 import com.selflock.model.Schedule
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -54,6 +55,7 @@ class ScheduleRepository(private val prefs: AppPrefs) {
                     put("startMinutes", s.startMinutes)
                     put("durationMinutes", s.durationMinutes)
                     put("days", JSONArray(s.days.sorted()))
+                    put("holidayMode", s.holidayMode.name)
                 }
             )
         }
@@ -72,7 +74,11 @@ class ScheduleRepository(private val prefs: AppPrefs) {
             enabled = json.optBoolean("enabled", true),
             startMinutes = json.optInt("startMinutes", 23 * 60),
             durationMinutes = json.optInt("durationMinutes", 8 * 60),
-            days = days
+            days = days,
+            // 老数据没有这个字段，默认 IGNORE —— 保持和升级前完全一致的行为
+            holidayMode = runCatching {
+                HolidayMode.valueOf(json.optString("holidayMode", HolidayMode.IGNORE.name))
+            }.getOrDefault(HolidayMode.IGNORE)
         )
     }
 }
