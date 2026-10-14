@@ -32,7 +32,7 @@ android {
         minSdk = 26
         targetSdk = 37
         versionCode = gitCommitCount
-        versionName = "2.1.0"
+        versionName = "2.1.1"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
@@ -46,10 +46,25 @@ android {
             // 真要上架时把这里换成自己的 signingConfig 即可。
             // AGP 会在缺失时自动生成 ~/.android/debug.keystore，CI 上同样适用。
             signingConfig = signingConfigs.getByName("debug")
-            optimization {
-                enable = true
-                packageScope = setOf("androidx.**", "kotlin.**", "kotlinx.**")
-            }
+
+            // ⚠️ 这里**曾经**有一段 AGP 9 的 optimization 配置：
+            //
+            //     optimization {
+            //         enable = true
+            //         packageScope = setOf("androidx.**", "kotlin.**", "kotlinx.**")
+            //     }
+            //
+            // 它让 release 包**启动即崩**：
+            //   java.lang.IllegalAccessError: Class kotlin.collections.i
+            //   extended by class qi is inaccessible
+            //     at androidx.lifecycle.ProcessLifecycleInitializer
+            //     at androidx.startup.InitializationProvider.onCreate
+            //
+            // R8 在包级作用域里把 Kotlin 内部类改了可见性，运行时才炸 ——
+            // 编译期一声不吭，debug 包也完全正常（不跑这套优化），
+            // 只有 release 包一装到真机上才暴露。v2.1.0 第一版就是这么发出去的。
+            //
+            // 删掉即可。release 包会大一些，但能跑。
         }
     }
     compileOptions {
