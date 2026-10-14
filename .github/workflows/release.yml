@@ -57,15 +57,28 @@ jobs:
       - name: Restore release keystore
         env:
           KEYSTORE_B64: ${{ secrets.RELEASE_KEYSTORE_BASE64 }}
+          STORE_PASSWORD: ${{ secrets.RELEASE_KEYSTORE_PASSWORD }}
+          KEY_ALIAS: ${{ secrets.RELEASE_KEY_ALIAS }}
         run: |
           if [ -z "$KEYSTORE_B64" ]; then
             echo "::error::缺少 Secret RELEASE_KEYSTORE_BASE64 —— 没有它就签不出能覆盖安装的包"
-            echo "请到 Settings → Secrets and variables → Actions 添加，见 README/TECHNICAL 的说明。"
             exit 1
           fi
           mkdir -p "$HOME/.android"
-          printf '%s' "$KEYSTORE_B64" | base64 -d > "$HOME/.android/waitleisure-release.jks"
-          echo "keystore 已就位：$(stat -c%s "$HOME/.android/waitleisure-release.jks") bytes"
+          # tr -d 去掉可能粘贴进来的换行/空格；base64 中间本来也不该有空白
+          printf '%s' "$KEYSTORE_B64" | tr -d '[:space:]' | base64 -d > "$HOME/.android/waitleisure-release.jks"
+          KS="$HOME/.android/waitleisure-release.jks"
+          echo "keystore: $(stat -c%s "$KS") bytes, sha256=$(sha256sum "$KS" | cut -c1-16)"
+
+          # 就地验一次口令 —— 口令错的话在**这一步**就报出来，
+          # 而不是等到 packaging 阶段崩成一句「Build release APK 失败」。
+          keytool -list -keystore "$KS" -storepass "$STORE_PASSWORD" -alias "$KEY_ALIAS" >/dev/null 2>&1 || {
+            echo "::error::keystore 打不开 —— 多半是 RELEASE_KEYSTORE_PASSWORD / RELEASE_KEY_ALIAS 值不对"
+            echo "(Secret 从网页粘贴时经常带上尾随换行或空格，build.gradle.kts 里已做 trim，"
+            echo " 所以这里更可能是口令本身打错了，或者 alias 不是 waitleisure)"
+            exit 1
+          }
+          echo "keystore 口令校验通过"
 
       - name: Build release APK
         env:

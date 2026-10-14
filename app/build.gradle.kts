@@ -45,9 +45,16 @@ val localProps = Properties().apply {
     if (f.exists()) f.inputStream().use { load(it) }
 }
 
+// 取值时统一 trim()：
+// GitHub Secrets 是从网页输入框粘贴进去的，**很容易带上尾随换行或空格**。
+// 一旦口令末尾多个 \n，AGP 打开 keystore 就会报
+//   Keystore was tampered with, or password was incorrect
+// 而且是在 packaging 阶段才炸 —— 表现成「Build release APK 失败」，
+// 完全看不出是空白字符的问题（本地构建又是好的，因为本地读的是 clean 值）。
 fun signingSecret(propKey: String, envKey: String): String? =
-    System.getenv(envKey)?.takeIf { it.isNotBlank() }
-        ?: localProps.getProperty(propKey)?.takeIf { it.isNotBlank() }
+    (System.getenv(envKey) ?: localProps.getProperty(propKey))
+        ?.trim()
+        ?.takeIf { it.isNotBlank() }
 
 val releaseStorePassword = signingSecret("waitleisure.storePassword", "WAITLEISURE_STORE_PASSWORD")
 val releaseKeyAlias = signingSecret("waitleisure.keyAlias", "WAITLEISURE_KEY_ALIAS")
