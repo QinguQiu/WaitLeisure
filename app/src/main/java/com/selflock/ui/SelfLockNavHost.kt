@@ -14,6 +14,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import com.selflock.data.Repos
+import com.selflock.model.TaskKind
 
 /**
  * 极简路由器。
@@ -49,8 +50,9 @@ fun SelfLockNavHost() {
     var editingId by remember { mutableStateOf(-1L) }
     // 应用选择页正在编辑哪个框：PICKER_GLOBAL(-1) = 全局白名单，否则是分组 id
     var pickerGroupId by remember { mutableStateOf(PICKER_GLOBAL) }
-    // 正在编辑哪个任务：-1 = 新建
+    // 正在编辑哪个任务：-1 = 新建；editingTaskKind 是新建时的类别
     var editingTaskId by remember { mutableStateOf(-1L) }
+    var editingTaskKind by remember { mutableStateOf(TaskKind.SIMPLE_LOCK) }
 
     val showBottomBar = screen == Screen.Home ||
         screen == Screen.Whitelist ||
@@ -144,6 +146,11 @@ fun SelfLockNavHost() {
 
                 Screen.Tasks -> TaskListScreen(
                     onBack = { screen = Screen.Settings },
+                    onNew = { kind ->
+                        editingTaskId = -1L
+                        editingTaskKind = kind
+                        screen = Screen.TaskEdit
+                    },
                     onEdit = { id ->
                         editingTaskId = id
                         screen = Screen.TaskEdit
@@ -152,6 +159,7 @@ fun SelfLockNavHost() {
 
                 Screen.TaskEdit -> TaskEditScreen(
                     taskId = editingTaskId,
+                    newKind = editingTaskKind,
                     onDone = { screen = Screen.Tasks }
                 )
             }

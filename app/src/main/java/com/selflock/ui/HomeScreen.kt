@@ -27,6 +27,7 @@ import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.Checkbox
 import androidx.compose.material3.FilterChip
+import androidx.compose.material3.Card
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.ui.res.stringResource
 import androidx.compose.material3.OutlinedButton
@@ -56,6 +57,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.selflock.alarm.AlarmScheduler
@@ -70,6 +72,7 @@ import com.selflock.lock.LockController
 import com.selflock.lock.LockScreenActivity
 import com.selflock.lock.Pomodoro
 import com.selflock.model.Schedule
+import com.selflock.model.TaskKind
 import com.selflock.model.describeDays
 import com.selflock.model.toDurationText
 import com.selflock.model.toHhMm
@@ -121,9 +124,23 @@ fun HomeScreen(onOpenPermissions: () -> Unit) {
     }
 
     val perms = remember(refreshKey) { PermissionSnapshot.of(context) }
-    var showLockNowDialog by remember { mutableStateOf(false) }
-    // 番茄钟参数编辑框（入口在状态卡那行配置说明上）
-    var showPomodoroEdit by remember { mutableStateOf(false) }
+    var showSimplePicker by remember { mutableStateOf(false) }
+    var showPomodoroPicker by remember { mutableStateOf(false) }
+    // 简单锁机选择框里的「自定义时长…」兜底入口
+    var showCustomDuration by remember { mutableStateOf(false) }
+
+    // 首页两张卡片上显示的任务：优先「上次用的那个」，否则该类别的第一个。
+    // 让用户按下去之前就知道会发生什么。
+    val simpleTask = remember(refreshKey) {
+        val all = Repos.tasks.current()
+        all.firstOrNull { it.id == Repos.prefs.lastSimpleTaskId }
+            ?: all.firstOrNull { it.kind == TaskKind.SIMPLE_LOCK }
+    }
+    val pomodoroTask = remember(refreshKey) {
+        val all = Repos.tasks.current()
+        all.firstOrNull { it.id == Repos.prefs.lastPomodoroTaskId }
+            ?: all.firstOrNull { it.kind == TaskKind.POMODORO }
+    }
     // 记住上次选的时长，下次打开弹窗时沿用，不用每次重选
     var lockNowMinutes by remember { mutableIntStateOf(DEFAULT_LOCK_NOW_MINUTES) }
     var holidayDismissed by remember {
@@ -182,14 +199,43 @@ fun HomeScreen(onOpenPermissions: () -> Unit) {
             scheduleCount = schedules.count { it.enabled },
             whitelistCount = whitelist.size,
             nextTrigger = nextTriggerText(schedules),
-            pomodoroText = Pomodoro.describe(Repos.prefs.pomodoroConfig),
-            pomodoroActive = pomodoroActive,
-            onLockNow = { showLockNowDialog = true },
-            onStartPomodoro = { Pomodoro.start(context); refreshKey++ },
-            onStopPomodoro = { Pomodoro.stop(context); refreshKey++ },
-            onEditPomodoro = { showPomodoroEdit = true },
             onOpenLockScreen = { LockScreenActivity.show(context) }
         )
+
+        // 两张独立的动作卡片。选中的任务存进 prefs，切页面回来还记得。
+        // 番茄钟进行中时，第二张卡变成「停止番茄钟」。
+        if (pomodoroActive) {
+            Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                ActionCard(
+                    title = "简单锁机", glyph = "⏳",
+                    taskName = simpleTask?.name, taskDetail = simpleTask?.describe(),
+                    modifier = Modifier.weight(1f),
+                    onClick = { showSimplePicker = true }
+                )
+                ActionCard(
+                    title = "番茄钟进行中", glyph = "🍅",
+                    taskName = Pomodoro.describe(Pomodoro.activeConfig()),
+                    taskDetail = "点此停止",
+                    modifier = Modifier.weight(1f),
+                    onClick = { Pomodoro.stop(context); refreshKey++ }
+                )
+            }
+        } else {
+            Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                ActionCard(
+                    title = "简单锁机", glyph = "⏳",
+                    taskName = simpleTask?.name, taskDetail = simpleTask?.describe(),
+                    modifier = Modifier.weight(1f),
+                    onClick = { showSimplePicker = true }
+                )
+                ActionCard(
+                    title = "番茄钟", glyph = "🍅",
+                    taskName = pomodoroTask?.name, taskDetail = pomodoroTask?.describe(),
+                    modifier = Modifier.weight(1f),
+                    onClick = { showPomodoroPicker = true }
+                )
+            }
+        }
 
         // 无障碍服务没在跑时，锁机完全不生效，而且界面上不会有任何报错。
         // 这张卡片必须放在最上面 —— 放到页面底部等于没有：用户不滚动就看不到，
@@ -294,27 +340,63 @@ fun HomeScreen(onOpenPermissions: () -> Unit) {
         Spacer(Modifier.height(8.dp))
     }
 
-    if (showLockNowDialog) {
-        LockNowDialog(
-            initialMinutes = lockNowMinutes,
-            hasPin = !Repos.prefs.pinHash.isNullOrEmpty(),
-            onDismiss = { showLockNowDialog = false },
-            onConfirm = { minutes ->
-                lockNowMinutes = minutes
-                showLockNowDialog = false
-                // 这里一律传具体的到期时间戳（而不是 0=无限期），
-                // 所以「立即锁机」一定会到点自动解除，不会出现无限期锁死的情况。
-                LockController.lock(context, System.currentTimeMillis() + minutes * 60_000L)
+    // 选中任务后才真正开始 —— 点卡片只是打开选择框，不会盲锁
+    if (showSimplePicker) {
+        TaskPickerDialog(
+            kind = TaskKind.SIMPLE_LOCK,
+            title = "选择简单锁机任务",
+            subtitle = "选中后立刻开始锁机，到点自动解除。",
+            onDismiss = { showSimplePicker = false },
+            onPick = { t ->
+                Repos.prefs.lastSimpleTaskId = t.id
+                showSimplePicker = false
+                if (Pomodoro.isActive()) Pomodoro.stop(context)
+                LockController.lock(context, System.currentTimeMillis() + t.durationMinutes * 60_000L)
+                refreshKey++
+            },
+            footer = {
+                Text(
+                    text = "自定义时长…",
+                    fontSize = 13.sp,
+                    color = MaterialTheme.colorScheme.primary,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clickable {
+                            showSimplePicker = false
+                            showCustomDuration = true
+                        }
+                        .padding(vertical = 8.dp)
+                )
             }
         )
     }
 
-    if (showPomodoroEdit) {
-        PomodoroConfigDialog(
-            onDismiss = { showPomodoroEdit = false },
-            onSave = { text ->
-                Repos.prefs.pomodoroConfig = text
-                showPomodoroEdit = false
+    if (showPomodoroPicker) {
+        TaskPickerDialog(
+            kind = TaskKind.POMODORO,
+            title = "选择番茄钟任务",
+            subtitle = "选中后立刻开始：专注时段锁机，休息时段自动解锁。",
+            onDismiss = { showPomodoroPicker = false },
+            onPick = { t ->
+                Repos.prefs.lastPomodoroTaskId = t.id
+                showPomodoroPicker = false
+                Pomodoro.start(context, configOverride = t.pomodoroConfig)
+                refreshKey++
+            }
+        )
+    }
+
+    if (showCustomDuration) {
+        LockNowDialog(
+            initialMinutes = lockNowMinutes,
+            hasPin = !Repos.prefs.pinHash.isNullOrEmpty(),
+            onDismiss = { showCustomDuration = false },
+            onConfirm = { minutes ->
+                lockNowMinutes = minutes
+                showCustomDuration = false
+                // 这里一律传具体的到期时间戳（而不是 0=无限期），
+                // 所以「立即锁机」一定会到点自动解除，不会出现无限期锁死的情况。
+                LockController.lock(context, System.currentTimeMillis() + minutes * 60_000L)
                 refreshKey++
             }
         )
@@ -438,12 +520,6 @@ private fun StatusCard(
     scheduleCount: Int,
     whitelistCount: Int,
     nextTrigger: String,
-    pomodoroText: String,
-    pomodoroActive: Boolean,
-    onLockNow: () -> Unit,
-    onStartPomodoro: () -> Unit,
-    onStopPomodoro: () -> Unit,
-    onEditPomodoro: () -> Unit,
     onOpenLockScreen: () -> Unit
 ) {
     SectionCard(
@@ -455,41 +531,64 @@ private fun StatusCard(
             Spacer(Modifier.width(16.dp))
             Text("定时规则 $scheduleCount 条", fontSize = 13.sp)
         }
-        Spacer(Modifier.height(12.dp))
         if (locked) {
+            Spacer(Modifier.height(12.dp))
             Button(onClick = onOpenLockScreen, modifier = Modifier.fillMaxWidth()) {
                 Text("回到锁机页")
             }
-        } else {
-            // 两种锁法并排：左边是直接锁一段时间，右边是按番茄钟节奏轮转。
-            // 番茄钟原来藏在设置页里，等于没有入口 —— 挪到首页。
-            Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                Button(
-                    onClick = onLockNow,
-                    modifier = Modifier.weight(1f)
-                ) {
-                    Text("简单锁机")
-                }
-                OutlinedButton(
-                    onClick = if (pomodoroActive) onStopPomodoro else onStartPomodoro,
-                    modifier = Modifier.weight(1f)
-                ) {
-                    Text(if (pomodoroActive) "停止番茄钟" else "番茄钟")
-                }
-            }
-            Spacer(Modifier.height(8.dp))
-            // 这行既是说明也是入口：点一下就能改番茄钟参数。
-            // 原来「自定义…」在设置页，番茄钟搬过来之后入口也一并搬过来，
-            // 否则参数就没地方改了。
+        }
+    }
+}
+
+/**
+ * 首页的两张动作卡片：简单锁机 / 番茄钟。
+ *
+ * 刻意做成**两张各自独立的卡片**而不是两个按钮：
+ * 卡片上要显示"这次会用哪个任务"，按钮塞不下这些信息。
+ *
+ * 点卡片**不会直接锁** —— 先弹出任务选择框，选中哪个才执行哪个。
+ */
+@Composable
+private fun ActionCard(
+    title: String,
+    glyph: String,
+    taskName: String?,
+    taskDetail: String?,
+    modifier: Modifier = Modifier,
+    onClick: () -> Unit
+) {
+    Card(
+        // weight 是 RowScope 的扩展，在独立 composable 里拿不到 —— 由调用方传进来
+        modifier = modifier.clickable { onClick() }
+    ) {
+        Column(Modifier.padding(14.dp)) {
             Text(
-                text = (if (pomodoroActive) "番茄钟进行中 · $pomodoroText"
-                else "番茄钟：$pomodoroText") + "（点此修改）",
+                text = "$glyph $title",
+                fontSize = 15.sp,
+                fontWeight = FontWeight.SemiBold
+            )
+            Spacer(Modifier.height(8.dp))
+            Text(
+                text = taskName ?: "还没有任务",
+                fontSize = 13.sp,
+                maxLines = 2,
+                overflow = TextOverflow.Ellipsis
+            )
+            if (taskDetail != null) {
+                Spacer(Modifier.height(2.dp))
+                Text(
+                    text = taskDetail,
+                    fontSize = 11.sp,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
+                )
+            }
+            Spacer(Modifier.height(6.dp))
+            Text(
+                text = if (taskName == null) "去「设置 → 任务」新建" else "点此选择任务",
                 fontSize = 11.sp,
-                lineHeight = 15.sp,
-                color = MaterialTheme.colorScheme.primary,
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .clickable { onEditPomodoro() }
+                color = MaterialTheme.colorScheme.primary
             )
         }
     }

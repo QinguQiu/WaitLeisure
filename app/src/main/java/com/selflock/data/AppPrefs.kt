@@ -83,6 +83,20 @@ class AppPrefs(context: Context) {
         get() = sp.getLong(KEY_ACTIVE_GROUP, -1L)
         set(value) = sp.edit().putLong(KEY_ACTIVE_GROUP, value).apply()
 
+    /**
+     * 首页两张卡片上「上次用的那个任务」。
+     *
+     * 存下来只是为了卡片上显示得出名字（否则只能写"点击选择"），
+     * 让用户按下去之前就知道会发生什么。-1 表示还没选过，回退到该类别的第一个任务。
+     */
+    var lastSimpleTaskId: Long
+        get() = sp.getLong(KEY_LAST_SIMPLE_TASK, -1L)
+        set(value) = sp.edit().putLong(KEY_LAST_SIMPLE_TASK, value).apply()
+
+    var lastPomodoroTaskId: Long
+        get() = sp.getLong(KEY_LAST_POMODORO_TASK, -1L)
+        set(value) = sp.edit().putLong(KEY_LAST_POMODORO_TASK, value).apply()
+
     /** 番茄钟配置：循环次数,专注分钟,短休息,长休息,几个循环后长休息。 */
     var pomodoroConfig: String
         get() = sp.getString(KEY_POMODORO_CONFIG, DEFAULT_POMODORO) ?: DEFAULT_POMODORO
@@ -137,6 +151,8 @@ class AppPrefs(context: Context) {
         const val KEY_GROUPS = "whitelist_groups"
     const val KEY_TASKS = "tasks"
     const val KEY_ACTIVE_GROUP = "active_whitelist_group"
+    const val KEY_LAST_SIMPLE_TASK = "last_simple_task"
+    const val KEY_LAST_POMODORO_TASK = "last_pomodoro_task"
         const val KEY_POMODORO_CONFIG = "pomodoro_config"
     const val KEY_POMODORO_RUN_CONFIG = "pomodoro_run_config"
         const val KEY_POMODORO_STATE = "pomodoro_state"
