@@ -300,7 +300,9 @@ foreach ($f in $ktFiles) {
             [void]$syms.Add($e.Groups[1].Value)
         }
     }
-    foreach ($m in [regex]::Matches($raw, '\b(?:fun|val|var)\s+([A-Za-z_][A-Za-z0-9_]*)')) {
+    # 同时收扩展函数：fun Schedule.matchesDate(...) 里的名字是 matchesDate 而不是接收者，
+    # 直接 \bfun\s+(\w+) 会抓成 Schedule，导致 Schedule.matchesDate 被误报「找不到声明」。
+    foreach ($m in [regex]::Matches($raw, '\b(?:fun|val|var)\s+(?:[A-Za-z_][A-Za-z0-9_.]*\s*\.\s*)?([A-Za-z_][A-Za-z0-9_]*)')) {
         [void]$syms.Add($m.Groups[1].Value)
     }
     # 主构造参数里的属性：data class Schedule(val id: Long, val days: Set<Int>)
