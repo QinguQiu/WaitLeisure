@@ -5,6 +5,7 @@ import android.content.Intent
 import android.graphics.BitmapFactory
 import android.os.Build
 import android.os.Bundle
+import android.view.WindowInsetsController
 import android.view.WindowManager
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.BackHandler
@@ -128,9 +129,16 @@ class LockScreenActivity : ComponentActivity() {
         // 状态栏透明 + 内容延伸到底。
         // 锁机页壁纸渲染在悬浮窗里，而状态栏底色由「最顶层的 Activity」决定 ——
         // 不把它设成 edge-to-edge，状态栏会显示 Activity 主题的底色，和壁纸不同色。
-        // 设透明后，悬浮窗（FLAG_LAYOUT_NO_LIMITS）的壁纸就能透到状态栏后面。
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
             window.setDecorFitsSystemWindows(false)
+            // 状态栏/导航栏图标用白色：锁机页背景都是深色或暗图，深色图标看不清；
+            // 而且「浅色外观」会让系统在状态栏铺一层白底 —— 那正是用户看到的
+            // 「状态栏有时完全变成白底」。这里显式清掉 LIGHT 标志位。
+            window.insetsController?.setSystemBarsAppearance(
+                0,
+                WindowInsetsController.APPEARANCE_LIGHT_STATUS_BARS or
+                    WindowInsetsController.APPEARANCE_LIGHT_NAVIGATION_BARS
+            )
         } else {
             @Suppress("DEPRECATION")
             window.addFlags(WindowManager.LayoutParams.FLAG_DRAWS_SYSTEM_BAR_BACKGROUNDS)

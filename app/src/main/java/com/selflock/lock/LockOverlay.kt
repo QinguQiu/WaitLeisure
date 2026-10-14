@@ -2,6 +2,7 @@ package com.selflock.lock
 
 import android.content.Context
 import android.graphics.PixelFormat
+import android.os.Build
 import android.os.Bundle
 import android.provider.Settings
 import android.view.View
@@ -91,14 +92,29 @@ object LockOverlay {
                 WindowManager.LayoutParams.MATCH_PARENT,
                 WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY,
                 // 可聚焦 + 可触摸（默认），不设 NOT_FOCUSABLE；
-                // LAYOUT_IN_SCREEN + LAYOUT_NO_LIMITS 让窗口延伸到状态栏/导航栏底下，
-                // 否则状态栏会露出它后面桌面的颜色，和锁机页黑底不一致；
+                // LAYOUT_IN_SCREEN + LAYOUT_NO_LIMITS 让窗口延伸到状态栏/导航栏底下；
                 // HARDWARE_ACCELERATED 给 Compose 用。
                 WindowManager.LayoutParams.FLAG_LAYOUT_IN_SCREEN or
                     WindowManager.LayoutParams.FLAG_LAYOUT_NO_LIMITS or
                     WindowManager.LayoutParams.FLAG_HARDWARE_ACCELERATED,
                 PixelFormat.OPAQUE
-            )
+            ).apply {
+                // Android 11+ 光有 FLAG_LAYOUT_NO_LIMITS 已经不够 ——
+                // 系统还会按 fitInsetsTypes 给窗口避让系统栏，默认把悬浮窗压在状态栏下面。
+                // 后果（真机实测）：
+                //   · 状态栏露出下面 LockScreenActivity 的内容 → 和锁机页不是一张连续图，边缘错乱
+                //   · Activity 不在时（例如无障碍拦截路径只盖遮罩）露出桌面 → MIUI 状态栏是白底，
+                //     看起来就是「状态栏有时完全变成白底」
+                // 置 0 = 不避让任何系统栏，配合 NO_LIMITS 才是真正的全屏。
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
+                    fitInsetsTypes = 0
+                }
+                // 刘海屏也要铺满，否则顶部会留一条
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
+                    layoutInDisplayCutoutMode =
+                        WindowManager.LayoutParams.LAYOUT_IN_DISPLAY_CUTOUT_MODE_SHORT_EDGES
+                }
+            }
 
             wm.addView(view, params)
             overlayView = view
