@@ -51,21 +51,41 @@ jobs:
       #   INSTALL_FAILED_UPDATE_INCOMPATIBLE
       # 只能卸载重装，白名单 / 定时 / 任务全部重配。
       #
-      # 所以签名密钥必须固定，而且**不能进仓库**（仓库是公开的），
-      # 用 GitHub Secrets 在构建时注入。
+      # 所以签名密钥必须固定，而且**不能进仓库**（仓库是公开的）。
+      #
+      # 只要**一个** Secret：RELEASE_KEYSTORE，格式是一行三段的
+      #     <keystore 的 base64>|<口令>|<别名>
+      #
+      # 为什么打包成一个而不是分四个 Secret：分四个要人肉填四遍，
+      # 实测第一版就把 base64 粘进了「口令」那一栏（pwd_len=3696），
+      # 而 CI 只报一句「Build release APK 失败」，查了半天。
+      # 一个值、粘一次，没有粘错的机会。
       # ---------------------------------------------------------------------
       - name: Restore release keystore
         env:
-          KEYSTORE_B64: ${{ secrets.RELEASE_KEYSTORE_BASE64 }}
-          STORE_PASSWORD: ${{ secrets.RELEASE_KEYSTORE_PASSWORD }}
-          KEY_ALIAS: ${{ secrets.RELEASE_KEY_ALIAS }}
+          BUNDLE: ${{ secrets.RELEASE_KEYSTORE }}
         run: |
-          if [ -z "$KEYSTORE_B64" ]; then
-            echo "::error::缺少 Secret RELEASE_KEYSTORE_BASE64 —— 没有它就签不出能覆盖安装的包"
+          if [ -z "$BUNDLE" ]; then
+            echo "::error::缺少 Secret RELEASE_KEYSTORE —— 没有它就签不出能覆盖安装的包"
             exit 1
           fi
+
+          KEYSTORE_B64="${BUNDLE%%|*}"
+          REST="${BUNDLE#*|}"
+          STORE_PASSWORD="${REST%%|*}"
+          KEY_ALIAS="${REST#*|}"
+
+          # 三段都得在，而且口令不该长到离谱（那通常意味着把 base64 粘进来了）
+          if [ "$KEYSTORE_B64" = "$BUNDLE" ] || [ "$REST" = "$BUNDLE" ]; then
+            echo "::error::RELEASE_KEYSTORE 格式不对 —— 需要 <base64>|<口令>|<别名> 三段用竖线分隔。bundle_len=${#BUNDLE}"
+            exit 1
+          fi
+          if [ "${#STORE_PASSWORD}" -gt 200 ]; then
+            echo "::error::口令字段有 ${#STORE_PASSWORD} 个字符，太长了 —— 多半把 base64 粘到第二段了。bundle_len=${#BUNDLE}"
+            exit 1
+          fi
+
           mkdir -p "$HOME/.android"
-          # tr -d 去掉可能粘贴进来的换行/空格；base64 中间本来也不该有空白
           printf '%s' "$KEYSTORE_B64" | tr -d '[:space:]' | base64 -d > "$HOME/.android/waitleisure-release.jks"
           KS="$HOME/.android/waitleisure-release.jks"
           SIZE=$(stat -c%s "$KS")
@@ -80,7 +100,6 @@ jobs:
           if keytool -list -keystore "$KS" -storepass "$STORE_PASSWORD" -alias "$KEY_ALIAS" >/dev/null 2>&1; then
             echo "keystore 口令与 alias 校验通过（$INFO）"
           elif keytool -list -keystore "$KS" -storepass "$STORE_PASSWORD" >/dev/null 2>&1; then
-            # 口令没问题，那问题就在 alias 上
             REAL=$(keytool -list -keystore "$KS" -storepass "$STORE_PASSWORD" 2>/dev/null | grep -i 'PrivateKeyEntry' | head -1 | sed 's/,.*//')
             echo "::error::keystore 口令正确，但 alias 不对。$INFO 实际 alias=[${REAL}]"
             exit 1
@@ -89,14 +108,16 @@ jobs:
             exit 1
           fi
 
+          # 供后面的构建步骤使用
+          echo "WAITLEISURE_STORE_PASSWORD=$STORE_PASSWORD" >> "$GITHUB_ENV"
+          echo "WAITLEISURE_KEY_ALIAS=$KEY_ALIAS" >> "$GITHUB_ENV"
+          echo "WAITLEISURE_KEY_PASSWORD=$STORE_PASSWORD" >> "$GITHUB_ENV"
+
       - name: Build release APK
-        env:
-          # keystore 的路径不用给：build.gradle.kts 默认就找
-          # ${user.home}/.android/waitleisure-release.jks，runner 上正好是
-          # 上一步解出来的那个位置。
-          WAITLEISURE_STORE_PASSWORD: ${{ secrets.RELEASE_KEYSTORE_PASSWORD }}
-          WAITLEISURE_KEY_ALIAS: ${{ secrets.RELEASE_KEY_ALIAS }}
-          WAITLEISURE_KEY_PASSWORD: ${{ secrets.RELEASE_KEY_PASSWORD }}
+        # keystore 的路径不用给：build.gradle.kts 默认就找
+        # ${user.home}/.android/waitleisure-release.jks，runner 上正好是
+        # 上一步解出来的那个位置。
+        # 口令和 alias 由上一步写进 $GITHUB_ENV，不需要再单独配 Secret。
         run: ./gradlew :app:assembleRelease --no-daemon --stacktrace
 
       # 兜底：万一 keystore 没生效、悄悄退回 debug 签名，这里直接失败，
