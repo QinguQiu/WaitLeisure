@@ -389,12 +389,14 @@ private fun LockScreen(
  * 而矩形窗口没法做局部触摸透传 —— 所以只能自己识别手势再主动展开。
  * 展开后下拉栏在悬浮窗之上，可以正常操作。
  */
-private fun expandNotificationShade(context: Context) {
-    runCatching {
-        val service = context.getSystemService("statusbar")
-        val clazz = Class.forName("android.app.StatusBarManager")
-        clazz.getMethod("expandNotificationsPanel").invoke(service)
-    }
+private fun expandNotificationShade(context: Context): Boolean = runCatching {
+    val service = context.getSystemService("statusbar")
+    val clazz = Class.forName("android.app.StatusBarManager")
+    clazz.getMethod("expandNotificationsPanel").invoke(service)
+    true
+}.getOrElse {
+    DiagLog.add("下拉栏", "展开失败：" + it.javaClass.simpleName + " " + it.message)
+    false
 }
 
 /** 自绘状态栏：左边时间，右边网络类型 + 电量。
@@ -417,11 +419,11 @@ private fun OverlayStatusBar(now: Long, modifier: Modifier = Modifier) {
     // 展开后下拉栏在悬浮窗**之上**（base layer 151000 > 111000），可以正常操作。
     // 「远离手机」也带这个权限，正是同一个原因。
     var dragged by remember { mutableFloatStateOf(0f) }
+    // 一次手势只展开一次。
+    // 之前没这个闸门，结果是每个 MOVE 事件累加过阈值就调一次 —— 实测一次下拉触发了 11 次
+    // expandNotificationsPanel()，反复展开互相打断，最后停在收起状态，看起来就是「没反应」。
+    var firedThisGesture by remember { mutableStateOf(false) }
     val threshold = with(LocalDensity.current) { 36.dp.toPx() }
-
-    fun expandShade() {
-        expandNotificationShade(context)
-    }
 
     val battery = rememberBatteryPercent()
     val network = rememberNetworkLabel(now)
@@ -434,18 +436,26 @@ private fun OverlayStatusBar(now: Long, modifier: Modifier = Modifier) {
             .height(barHeight)
             .pointerInput(Unit) {
                 detectVerticalDragGestures(
-                    onDragStart = { dragged = 0f },
+                    onDragStart = {
+                        dragged = 0f
+                        firedThisGesture = false
+                    },
                     onDragEnd = { dragged = 0f },
                     onDragCancel = { dragged = 0f }
                 ) { _, dragAmount ->
-                    if (dragAmount > 0f) {
+                    if (dragAmount > 0f && !firedThisGesture) {
                         dragged += dragAmount
                         if (dragged >= threshold) {
-                            dragged = 0f
-                            expandShade()
+                            firedThisGesture = true
+                            DiagLog.add("下拉栏", "识别到下拉手势，先撤遮罩再展开")
+                            // 先把自己（悬浮窗）撤掉再展开。
+                            // 实测：遮罩持有时 expandNotificationsPanel() 会返回成功但系统不理会 ——
+                            // 撤掉遮罩它就正常了。遮罩不在的这段时间由锁机 Activity 兜着，
+                            // 下拉栏收起后看门狗会在 1 秒内把遮罩补回来。
+                            LockOverlay.hide()
+                            val ok = expandNotificationShade(context)
+                            DiagLog.add("下拉栏", if (ok) "展开调用成功" else "展开调用失败")
                         }
-                    } else {
-                        dragged = 0f
                     }
                 }
             }
