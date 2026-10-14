@@ -3,6 +3,8 @@ package com.selflock.lock
 import android.content.Context
 import android.content.Intent
 import com.selflock.data.Repos
+import com.selflock.util.DiagLog
+import com.selflock.util.Permissions
 
 /**
  * 锁机动作的统一入口。
@@ -15,6 +17,20 @@ object LockController {
     /** 开始锁定。untilMillis <= 0 表示无限期锁定（只能靠 PIN 解除）。 */
     fun lock(context: Context, untilMillis: Long, scheduleId: Long = -1L) {
         Repos.ensure(context)
+
+        // 无障碍服务没在跑时不做任何锁机动作。
+        //
+        // 锁机界面（悬浮窗 + 锁机 Activity）都是「盖上去就撤不掉」的：
+        // 唯一能撤掉它们的就是无障碍服务的窗口事件。服务不在还盖上去，
+        // 白名单应用会被一起挡住，手机直接没法用 —— 真机实测踩到过。
+        //
+        // 首页有醒目提示「无障碍服务未运行 —— 锁机当前不生效」，
+        // 这里宁可锁不住，也不能把手机锁死。
+        if (!Permissions.isAccessibilityEnabled(context)) {
+            DiagLog.add("锁机", "跳过（无障碍未运行，锁了也撤不掉）")
+            return
+        }
+
         Repos.lockState.lockUntil(untilMillis, scheduleId)
         startService(context)
         // 悬浮窗优先：锁机界面就是它，秒显、常驻、不经过 Activity 启动，MIUI 拦不住。

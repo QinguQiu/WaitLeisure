@@ -19,6 +19,7 @@ import androidx.savedstate.SavedStateRegistryController
 import androidx.savedstate.SavedStateRegistryOwner
 import androidx.savedstate.setViewTreeSavedStateRegistryOwner
 import com.selflock.util.DiagLog
+import com.selflock.util.Permissions
 
 /**
  * 全屏锁机悬浮窗。
@@ -65,6 +66,21 @@ object LockOverlay {
     fun show(context: Context, reason: String) {
         if (isShowing) return
         if (!canShow(context)) return
+
+        // 无障碍服务没在跑时**绝不盖遮罩**。
+        //
+        // 遮罩是「谁也撤不掉」的常驻窗口，唯一能撤它的就是无障碍服务的窗口事件。
+        // 服务不在还盖上去，白名单应用会被一起挡住 —— 手机直接没法用。
+        // 真机实测踩到：装完 APK 后 MIUI 会清掉无障碍服务，此时锁机一启动，
+        // 用户就再也进不去任何应用了。
+        //
+        // 首页已经用大红卡片写着「无障碍未运行 —— 锁机当前不生效」，
+        // 这里保持不盖即可 —— 宁可锁不住，也不能把手机锁死。
+        if (!Permissions.isAccessibilityEnabled(context)) {
+            DiagLog.add("悬浮窗", "跳过盖上（无障碍未运行）：$reason")
+            return
+        }
+
         runCatching {
             val wm = context.getSystemService(WindowManager::class.java)
                 ?: error("拿不到 WindowManager")
