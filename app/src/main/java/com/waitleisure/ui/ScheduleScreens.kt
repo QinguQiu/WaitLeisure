@@ -55,6 +55,7 @@ import com.waitleisure.model.DAY_LABELS
 import com.waitleisure.model.HolidayCalendar
 import com.waitleisure.model.HolidayMode
 import com.waitleisure.model.Schedule
+import com.waitleisure.model.durationBetween
 import com.waitleisure.model.TaskKind
 import com.waitleisure.model.activeWindowEndMillis
 import com.waitleisure.model.describeDays
@@ -63,7 +64,6 @@ import com.waitleisure.model.toDurationText
 import com.waitleisure.model.toHhMm
 
 /** 定时规则的时长上限。24 小时 —— 规则本来就是每天重复的，再长没有意义。 */
-private const val MAX_DURATION_MINUTES = 24 * 60
 
 /** 常用时长的快捷入口。第一个是 1 分钟，调试锁机时最省事。 */
 private val DURATION_PRESETS = listOf(1, 5, 30, 60, 120, 480, 1440)
@@ -232,7 +232,21 @@ fun ScheduleEditScreen(scheduleId: Long, onDone: () -> Unit) {
     val isNew = existing == null
 
     var startMinutes by remember { mutableIntStateOf(existing?.startMinutes ?: (23 * 60)) }
-    var durationMinutes by remember { mutableIntStateOf(existing?.durationMinutes ?: (8 * 60)) }
+
+    // 「结束时间」而不是「设时长」。
+    //
+    // 用户更习惯「23:00 锁到 07:00」这种说法 —— 让他去心算「8 小时」是负担，
+    // 而且跨天的时候（23:00 开始、8 小时后）很容易设错。
+    //
+    // 模型里存的**仍然是 durationMinutes**，这里只是按结束时刻来编辑：
+    // 保存时用 durationBetween() 反算回去。这样数据格式不变、不用迁移，
+    // 定时触发和闹钟那套逻辑一行都不用动。
+    var endMinutes by remember {
+        mutableIntStateOf(
+            existing?.let { (it.startMinutes + it.durationMinutes) % Schedule.MINUTES_PER_DAY }
+                ?: ((startMinutes + DEFAULT_DURATION_MINUTES) % Schedule.MINUTES_PER_DAY)
+        )
+    }
     var days by remember { mutableStateOf(existing?.days ?: setOf(1, 2, 3, 4, 5, 6, 7)) }
     var holidayMode by remember { mutableStateOf(existing?.holidayMode ?: HolidayMode.IGNORE) }
 
@@ -291,7 +305,7 @@ fun ScheduleEditScreen(scheduleId: Long, onDone: () -> Unit) {
                 FilterChip(
                     selected = !useTask,
                     onClick = { useTask = false },
-                    label = { Text("设定时长") }
+                    label = { Text("结束时间") }
                 )
                 FilterChip(
                     selected = useTask,
@@ -345,20 +359,37 @@ fun ScheduleEditScreen(scheduleId: Long, onDone: () -> Unit) {
                 }
             } else {
                 Spacer(Modifier.height(10.dp))
+                // 复用「时/分」两列选择器，但上限放到 1439 ——
+                // 于是它就是一个 0:00～23:59 的**时刻**选择器，不用另写一个组件。
                 DurationPicker(
-                    totalMinutes = durationMinutes,
-                    maxMinutes = MAX_DURATION_MINUTES,
-                    onSelect = { durationMinutes = it }
+                    totalMinutes = endMinutes,
+                    maxMinutes = Schedule.MINUTES_PER_DAY - 1,
+                    minMinutes = 0,
+                    onSelect = { endMinutes = it }
                 )
+
+                // 结束时刻定了，时长是算出来的 —— 这里说清楚，免得用户以为还要再设一次
+                Spacer(Modifier.height(8.dp))
+                Text(
+                    text = "从 ${startMinutes.toHhMm()} 锁到 ${endMinutes.toHhMm()}，" +
+                        "共 ${durationBetween(startMinutes, endMinutes).toDurationText()}" +
+                        if (endMinutes <= startMinutes) "（跨到次日）" else "",
+                    fontSize = 12.sp,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+
+                // 常用档位改成「点一下就跳到对应的结束时刻」。
+                // 标签显示的是时刻本身（用户现在关心的就是这个），不是时长。
                 Spacer(Modifier.height(8.dp))
                 Row(
                     horizontalArrangement = Arrangement.spacedBy(8.dp),
                     modifier = Modifier.horizontalScroll(rememberScrollState())
                 ) {
                     DURATION_PRESETS.forEach { preset ->
+                        val target = (startMinutes + preset) % Schedule.MINUTES_PER_DAY
                         AssistChip(
-                            onClick = { durationMinutes = preset },
-                            label = { Text(preset.toDurationText()) }
+                            onClick = { endMinutes = target },
+                            label = { Text(target.toHhMm()) }
                         )
                     }
                 }
@@ -527,7 +558,7 @@ fun ScheduleEditScreen(scheduleId: Long, onDone: () -> Unit) {
             val selectedTask = if (useTask) tasks.firstOrNull { it.id == taskId } else null
             // 简单锁机任务才有确定时长；番茄钟按相位轮转，给不出单一结束时刻
             val effective = selectedTask?.takeIf { it.kind == TaskKind.SIMPLE_LOCK }?.durationMinutes
-                ?: durationMinutes
+                ?: durationBetween(startMinutes, endMinutes)
             val end = (startMinutes + effective) % Schedule.MINUTES_PER_DAY
 
             Text(
@@ -579,7 +610,7 @@ fun ScheduleEditScreen(scheduleId: Long, onDone: () -> Unit) {
                     val base = existing ?: Schedule(id = Repos.schedules.nextId())
                     val saved = base.copy(
                         startMinutes = startMinutes,
-                        durationMinutes = durationMinutes,
+                        durationMinutes = durationBetween(startMinutes, endMinutes),
                         days = days,
                         holidayMode = holidayMode,
                         enabled = true,
@@ -637,3 +668,4 @@ private fun persistSchedule(context: Context, schedule: Schedule) {
 }
 
 
+private const val DEFAULT_DURATION_MINUTES = 8 * 60

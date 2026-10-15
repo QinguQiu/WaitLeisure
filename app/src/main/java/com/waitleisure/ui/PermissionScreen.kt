@@ -132,15 +132,15 @@ fun PermissionScreen(onBack: () -> Unit) {
             CheckRow(
                 ok = perms.overlay,
                 title = "显示悬浮窗",
-                description = "全屏遮罩。没有它，连点几次 Home 就能逃到桌面 —— " +
-                    "因为 MIUI 会拒绝被 Home 切到后台的锁机页再回到前台，而遮罩不经过 Activity 启动",
+                description = "全屏遮罩。没有它，连点几次 Home 就能逃到桌面 —— ", //+
+                //    "因为 MIUI 会拒绝被 Home 切到后台的锁机页再回到前台，而遮罩不经过 Activity 启动",
                 actionLabel = "去授权",
                 onAction = { Permissions.openOverlaySettings(context) }
             )
             CheckRow(
                 ok = perms.usageStats,
                 title = "使用情况访问",
-                description = "前台应用的第二信号源。无障碍服务「绑定但没收事件」时用它兜底",
+                description = "前台应用的第二信号源。",//无障碍服务「绑定但没收事件」时用它兜底
                 actionLabel = "去授权",
                 onAction = { Permissions.openUsageAccessSettings(context) }
             )
@@ -182,15 +182,9 @@ fun PermissionScreen(onBack: () -> Unit) {
             title = "MIUI 专属：后台弹出界面",
             subtitle = "不在这张体检表里（MIUI 自加权限，查不到状态）"
         ) {
-            Text(
-                text = "它才是「允许应用从后台弹出界面」的正式开关。开了它，锁机页被 Home 推到后台后\n" +
-                    "也能顺利回到前台，不再依赖遮罩兜底。\n\n" +
-                    "如果连点几次 Home 还是能回到桌面，多半就是它没开。",
-                fontSize = 12.sp,
-                lineHeight = 17.sp,
-                color = MaterialTheme.colorScheme.onSurfaceVariant
-            )
-            Spacer(Modifier.height(4.dp))
+            // 这里原来有一段说明文字，被注释掉了 —— 留着的是个没有 text 参数的
+            // Text(...)，编译不过（No value passed for parameter 'text'）。
+            // 直接删掉整块；想把说明加回来的话，在这里补一个带 text 的 Text 即可。
             TextButton(onClick = { Permissions.openMiuiPermissionEditor(context) }) {
                 Text("打开 MIUI 权限页")
             }

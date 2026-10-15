@@ -292,10 +292,9 @@ fun HomeScreen(onOpenPermissions: () -> Unit) {
             subtitle = null
         ) {
             Text(
-                text = "1. 先开启无障碍服务，否则锁机不会生效。\n" +
-                    "2. 锁定期间按 Home 键会被弹回锁机页，这是预期行为。\n" +
-                    "3. 输入法、系统界面、拨号盘永远放行，保证打得出紧急电话。\n" +
-                    "4. 安全模式下无障碍服务不运行，可借此卸载 —— 非 root 无法根治。",
+                text = "1. 一定要开启无障碍服务，否则锁机无效。\n" +
+                    "2. 锁定期间只能使用白名单软件，无法回到桌面。\n" ,
+                    
                 fontSize = 12.sp,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                 lineHeight = 18.sp

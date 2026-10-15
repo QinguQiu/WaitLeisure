@@ -163,3 +163,19 @@ fun Int.toDurationText(): String {
         else -> "${m} 分钟"
     }
 }
+
+/**
+ * [Schedule.endMinutes] 的反函数：由「起始时刻 + 结束时刻」反算时长（分钟）。
+ *
+ * 为什么要单独有这个：界面上是按**结束时刻**编的（「23:00 锁到 07:00」比
+ * 「锁 8 小时」好想，跨天时也不容易设错），但模型里存的是 durationMinutes。
+ * 保存时就用它换回去 —— 数据格式不变，定时和闹钟那套逻辑一行都不用动。
+ *
+ * 起止相同视为**锁满一整天**而不是 0 分钟：0 分钟等于没锁，
+ * 而且定时逻辑里 0 会变成一个立刻失效的窗口，不如按常识理解成 24 小时。
+ */
+fun durationBetween(startMinutes: Int, endMinutes: Int): Int {
+    val day = Schedule.MINUTES_PER_DAY
+    val diff = ((endMinutes - startMinutes) % day + day) % day
+    return if (diff == 0) day else diff
+}
