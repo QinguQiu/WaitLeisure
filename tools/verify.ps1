@@ -1,4 +1,4 @@
-# WaitLeisure（等闲）工程静态校验
+﻿ WaitLeisure（等闲）工程静态校验
 #
 # 在没有 Android SDK / Gradle 的机器上，用纯 PowerShell 校验那些
 # 「不写出来编译器就会报错、但人眼很容易漏掉」的问题：
