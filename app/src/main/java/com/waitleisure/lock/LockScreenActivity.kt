@@ -187,7 +187,13 @@ class LockScreenActivity : ComponentActivity() {
                     WindowInsetsController.APPEARANCE_LIGHT_STATUS_BARS or
                         WindowInsetsController.APPEARANCE_LIGHT_NAVIGATION_BARS
                 )
-                // 藏掉系统状态栏，避免和我们自己画的那条重复
+                // 请求隐藏系统状态栏，避免和我们自己画的那条叠成两条。
+                //
+                // 实测（真机 / MIUI）：这条请求对「我们的 insets」是生效的 ——
+                // 归零之后 OverlayStatusBar 回到 y=0，和系统条重合；
+                // 但 MIUI 并不会真的把系统状态栏撤掉，顶上看到的仍是系统那条。
+                // 所以最终效果是**只剩一条**（系统条压在我们的条上面），
+                // 而不是「只剩我们那条」。够用，但别指望它能把系统条去掉。
                 window.insetsController?.hide(android.view.WindowInsets.Type.statusBars())
             }
         } else {
