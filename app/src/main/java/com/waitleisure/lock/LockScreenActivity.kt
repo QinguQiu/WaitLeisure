@@ -81,7 +81,7 @@ import androidx.core.content.ContextCompat
 import androidx.core.graphics.drawable.toBitmap
 import com.waitleisure.R
 import com.waitleisure.data.Repos
-import com.waitleisure.data.wallpaperMaxOffset
+import com.waitleisure.ui.FramedWallpaper
 import com.waitleisure.ui.AppIcon
 import com.waitleisure.ui.rememberAppLabel
 import com.waitleisure.util.DiagLog
@@ -337,29 +337,17 @@ private fun LockScreen(
 
     Box(modifier = Modifier.fillMaxSize()) {
         if (wallpaper != null) {
-            Image(
+            // 取景渲染直接复用取景页那个组件 —— 容器一样大就画得一模一样，
+            // 不存在「预览好好的、锁机页露黑边」这种事。
+            // （曾经两边各写一套：这边按 ContentScale.Crop 画、那边按实际尺寸画，
+            //   结果滑动时锁机页会露黑边。Crop 超出的部分根本画不出来。）
+            FramedWallpaper(
                 bitmap = wallpaper,
-                contentDescription = null,
-                contentScale = ContentScale.Crop,
-                modifier = Modifier
-                    .fillMaxSize()
-                    // 取景：Crop 打底，再叠缩放 + 平移。
-                    // 平移量按屏幕尺寸换算（存的是倍数），越界收敛用和取景页
-                    // 同一个 wallpaperMaxOffset()，所以预览里看到什么这里就是什么。
-                    .graphicsLayer {
-                        val (maxX, maxY) = wallpaperMaxOffset(
-                            scale = wallpaperScale,
-                            imageWidth = wallpaper.width,
-                            imageHeight = wallpaper.height,
-                            containerWidth = size.width,
-                            containerHeight = size.height
-                        )
-                        scaleX = wallpaperScale
-                        scaleY = wallpaperScale
-                        translationX = wallpaperOffsetX.coerceIn(-maxX, maxX) * size.width
-                        translationY = wallpaperOffsetY.coerceIn(-maxY, maxY) * size.height
-                    }
-                    .then(if (canBlur) Modifier.blur(blurDp) else Modifier)
+                scale = wallpaperScale,
+                offsetX = wallpaperOffsetX,
+                offsetY = wallpaperOffsetY,
+                modifier = Modifier.fillMaxSize(),
+                imageModifier = if (canBlur) Modifier.blur(blurDp) else Modifier
             )
             if (!canBlur) {
                 Box(

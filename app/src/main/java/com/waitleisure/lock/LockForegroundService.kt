@@ -63,6 +63,9 @@ class LockForegroundService : Service() {
         scope.launch {
             var wasInGrace = false
             var escapeAttempts = 0
+            // 之前是否真的处于锁机中。用来区分「锁机到期结束」和
+            // 「服务被误启动时本来就没锁」—— 后者不该弹首页。
+            var wasLocked = Repos.lockState.isLockedNow()
             while (isActive) {
                 // 番茄钟：到点推进相位（专注 ↔ 休息）。放在最前面 ——
                 // 休息时段锁是开的，靠这一句才能继续走到下一组专注。
@@ -71,8 +74,14 @@ class LockForegroundService : Service() {
                 if (!Repos.lockState.isLockedNow() && !Pomodoro.isActive()) {
                     Repos.lockState.refresh()
                     shutdown()
+                    // 锁机结束（时间到 / 番茄钟跑完）→ 把 App 首页拉到前台。
+                    // 用户要的就是「锁完自动把首页弹出来」，省得自己再点开。
+                    if (wasLocked) {
+                        LockController.bringAppToFront(this@LockForegroundService, "锁机结束")
+                    }
                     return@launch
                 }
+                if (Repos.lockState.isLockedNow()) wasLocked = true
 
                 // 免打扰窗口刚结束的那一刻补一次检查。
                 val inGrace = LockAccessibilityService.inLaunchGrace()

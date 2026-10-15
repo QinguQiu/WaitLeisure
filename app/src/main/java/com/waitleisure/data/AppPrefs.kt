@@ -208,49 +208,72 @@ class AppPrefs(context: Context) {
 }
 
 /**
- * 算出当前取景下，横向/纵向各最多能平移多少（单位是容器宽/高的倍数）。
+ * 壁纸取景的实际几何结果（都是像素）。
  *
- * ## 为什么不是简单地 (scale - 1) / 2
+ *   widthPx / heightPx  图片该被画成多大
+ *   txPx / tyPx         相对容器中心的偏移
+ */
+data class WallpaperFrame(
+    val widthPx: Float,
+    val heightPx: Float,
+    val txPx: Float,
+    val tyPx: Float
+)
+
+/**
+ * 给定图片、容器、缩放和归一化偏移，算出图片该画多大、偏多少。
  *
- * 第一版就是这么写的，结果是 **1.0× 时完全拖不动** —— 用户反馈「1.0 移动不了
- * 有问题」，说得对。原因：基准不是「图片刚好等于屏幕」，而是 ContentScale.Crop
- * 的覆盖缩放：
+ * ## 为什么不能沿用 ContentScale.Crop
  *
- *     基准缩放 crop = max(容器宽 / 图宽, 容器高 / 图高)
+ * 一开始是「Image 用 Crop 铺满，再套一层 graphicsLayer 做 scale/translation」。
+ * 结果是**一左右滑动就露黑边**（用户反馈），原因在绘制边界：
  *
- * 它保证图片**盖住**容器，于是**溢出的那个方向本来就有富余**：
- * 竖图放进竖屏，宽度方向通常刚好贴合（没得拖），高度方向却多出一大截（能拖）。
- * 把这些富余算进去，1.0× 自然就能沿溢出方向拖动。
+ *   Crop 虽然按「覆盖」比例把图放大到超出容器，但那部分**画不出来** ——
+ *   Image 只在自己的布局边界内绘制。所以图层内容实际就只有容器那么大，
+ *   一平移立刻露背景。
  *
- * 公式：图片画出来的尺寸 = 图尺寸 × crop × scale
- *       可平移量 = (画出来的尺寸 / 容器尺寸 - 1) / 2
+ * 正确做法是把 Image 的**布局尺寸本身**设成裁切后的尺寸，再在容器里平移。
+ * 这个函数负责算出那个尺寸和偏移：
  *
- * 取景页和锁机页渲染共用这一个函数 —— 预览里能拖到哪，锁机页就显示到哪。
+ *   crop = max(容器宽 / 图宽, 容器高 / 图高)      // 覆盖比例，保证不漏
+ *   画出来的尺寸 = 图尺寸 × crop × scale
+ *   可平移上限   = (画出来的尺寸 - 容器尺寸) / 2   // 再多就露背景
+ *
+ * 取景页和锁机页渲染共用这一个函数 —— 预览里能拖到哪，锁机页就显示到哪，
+ * 两边都不会露黑边。
  * （放成顶层函数而不是 AppPrefs 的伴生对象里：那个 companion 是 private 的，
  * 外面 ui / lock 包访问不到，编译会报 Cannot access 'companion object'。）
- *
- * @return (最大横向平移, 最大纵向平移)，均为容器宽/高的倍数，且 ≥ 0
  */
-fun wallpaperMaxOffset(
-    scale: Float,
+fun computeWallpaperFrame(
     imageWidth: Int,
     imageHeight: Int,
     containerWidth: Float,
-    containerHeight: Float
-): Pair<Float, Float> {
+    containerHeight: Float,
+    scale: Float,
+    offsetX: Float,
+    offsetY: Float
+): WallpaperFrame {
     if (imageWidth <= 0 || imageHeight <= 0 || containerWidth <= 0f || containerHeight <= 0f) {
-        return 0f to 0f
+        return WallpaperFrame(containerWidth, containerHeight, 0f, 0f)
     }
     val iw = imageWidth.toFloat()
     val ih = imageHeight.toFloat()
 
-    // Crop 的基准缩放：取较大的那个比例，保证两个方向都盖住容器
+    // 覆盖比例：取较大的那个，保证两个方向都盖住容器
     val crop = maxOf(containerWidth / iw, containerHeight / ih)
+    val safeScale = scale.coerceAtLeast(1f)
 
-    val drawnW = iw * crop * scale
-    val drawnH = ih * crop * scale
+    val width = iw * crop * safeScale
+    val height = ih * crop * safeScale
 
-    val maxX = ((drawnW / containerWidth - 1f) / 2f).coerceAtLeast(0f)
-    val maxY = ((drawnH / containerHeight - 1f) / 2f).coerceAtLeast(0f)
-    return maxX to maxY
+    // 平移上限：图片比容器多出来的那一半，推到极限时边缘正好贴住容器边缘
+    val maxTx = ((width - containerWidth) / 2f).coerceAtLeast(0f)
+    val maxTy = ((height - containerHeight) / 2f).coerceAtLeast(0f)
+
+    return WallpaperFrame(
+        widthPx = width,
+        heightPx = height,
+        txPx = (offsetX * containerWidth).coerceIn(-maxTx, maxTx),
+        tyPx = (offsetY * containerHeight).coerceIn(-maxTy, maxTy)
+    )
 }

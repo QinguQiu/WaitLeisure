@@ -2,6 +2,7 @@ package com.waitleisure.lock
 
 import android.content.Context
 import android.content.Intent
+import com.waitleisure.MainActivity
 import com.waitleisure.data.Repos
 import com.waitleisure.util.DiagLog
 import com.waitleisure.util.Permissions
@@ -59,6 +60,34 @@ object LockController {
         // 解锁就回到「只用全局白名单」。下次锁机时再由调用方重新指定分组。
         Repos.prefs.activeWhitelistGroupId = -1L
         stopService(context)
+        // 手动解锁也算「锁机结束」—— 用户刚在锁机页输完密码，
+        // 这时候把他送到 App 首页最自然。
+        bringAppToFront(context, "手动解锁")
+    }
+
+    /**
+     * 锁机结束后把 App 首页拉到前台。
+     *
+     * 用户要的行为：锁机一结束就把首页弹出来，省得自己再点开。
+     *
+     * 后台启动 Activity 在 Android 10+ 默认是拦的，但本应用持有一层
+     * 常驻悬浮窗（TYPE_APPLICATION_OVERLAY）—— 有悬浮窗权限就属于放行名单，
+     * 加上 MIUI 那边用户已经开了「后台弹出界面」，所以这里能起来。
+     * 万一被拦，只记一条诊断日志，不影响解锁本身。
+     *
+     * 只带 NEW_TASK 和 SINGLE_TOP：首页已经在任务栈里的话直接复用它，
+     * 不会叠出第二个 MainActivity。
+     */
+    fun bringAppToFront(context: Context, from: String) {
+        runCatching {
+            val intent = Intent(context, MainActivity::class.java).apply {
+                addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_SINGLE_TOP)
+            }
+            context.startActivity(intent)
+            DiagLog.add("锁机", "已把首页拉到前台（$from）")
+        }.onFailure {
+            DiagLog.add("锁机", "拉起首页失败（$from）：" + it.javaClass.simpleName + " " + it.message)
+        }
     }
 
     /**
