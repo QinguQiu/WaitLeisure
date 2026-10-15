@@ -17,6 +17,7 @@ import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.unit.IntOffset
 import com.waitleisure.data.computeWallpaperFrame
+import com.waitleisure.data.wallpaperMaxOffsetFraction
 import kotlin.math.roundToInt
 
 /** 取景缩放的默认上限。再大就只剩像素块了。 */
@@ -114,11 +115,31 @@ fun FramedWallpaper(
                     .matchParentSize()
                     .pointerInput(Unit) {
                         detectTransformGestures { _, pan, zoom, _ ->
+                            val newScale = (liveScale * zoom).coerceIn(1f, maxScale)
+
+                            // ★ 手势里也必须收敛，不能只靠渲染层。
+                            //
+                            // 之前只在渲染时 clamp，手势累加的 offsetX 本身没有上限：
+                            // 划到边缘后继续划，值还在偷偷变大 —— 于是反方向划时
+                            // 得先把这段「空划」抵消掉，图片才肯动。
+                            // 用户反馈原话：「边缘过量滑动时图片不动，
+                            // 但反方向滑动时需要把超量部分抵消掉才能继续移动」。
+                            //
+                            // 边界按 newScale 算：缩小之后上限会变小，
+                            // 用新缩放当场收敛，就不会留下越界的值。
+                            val (maxX, maxY) = wallpaperMaxOffsetFraction(
+                                scale = newScale,
+                                imageWidth = bitmap.width,
+                                imageHeight = bitmap.height,
+                                containerWidth = containerW,
+                                containerHeight = containerH
+                            )
+
                             // pan 是「相对上一次事件」的位移增量，所以这里是累加
                             liveTransform(
-                                (liveScale * zoom).coerceIn(1f, maxScale),
-                                liveOffsetX + pan.x / containerW,
-                                liveOffsetY + pan.y / containerH
+                                newScale,
+                                (liveOffsetX + pan.x / containerW).coerceIn(-maxX, maxX),
+                                (liveOffsetY + pan.y / containerH).coerceIn(-maxY, maxY)
                             )
                         }
                     }

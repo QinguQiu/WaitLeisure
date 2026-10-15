@@ -208,6 +208,39 @@ class AppPrefs(context: Context) {
 }
 
 /**
+ * 归一化的可平移上限（单位是容器宽/高的倍数），永远 ≥ 0。
+ *
+ * 取景页的**手势**和**渲染**共用这一个函数，两处必须一致 ——
+ * 否则就会出现「划到边缘还能继续划」：渲染层收敛了，但手势累加的值没有，
+ * 于是反方向划时得先把超量的部分抵消掉，图片才肯动（用户反馈）。
+ */
+fun wallpaperMaxOffsetFraction(
+    scale: Float,
+    imageWidth: Int,
+    imageHeight: Int,
+    containerWidth: Float,
+    containerHeight: Float
+): Pair<Float, Float> {
+    if (imageWidth <= 0 || imageHeight <= 0 || containerWidth <= 0f || containerHeight <= 0f) {
+        return 0f to 0f
+    }
+    val iw = imageWidth.toFloat()
+    val ih = imageHeight.toFloat()
+
+    // 覆盖比例：取较大的那个，保证两个方向都盖住容器
+    val crop = maxOf(containerWidth / iw, containerHeight / ih)
+    val safeScale = scale.coerceAtLeast(1f)
+
+    val width = iw * crop * safeScale
+    val height = ih * crop * safeScale
+
+    val maxTxPx = ((width - containerWidth) / 2f).coerceAtLeast(0f)
+    val maxTyPx = ((height - containerHeight) / 2f).coerceAtLeast(0f)
+
+    return (maxTxPx / containerWidth) to (maxTyPx / containerHeight)
+}
+
+/**
  * 壁纸取景的实际几何结果（都是像素）。
  *
  *   widthPx / heightPx  图片该被画成多大
@@ -266,14 +299,19 @@ fun computeWallpaperFrame(
     val width = iw * crop * safeScale
     val height = ih * crop * safeScale
 
-    // 平移上限：图片比容器多出来的那一半，推到极限时边缘正好贴住容器边缘
-    val maxTx = ((width - containerWidth) / 2f).coerceAtLeast(0f)
-    val maxTy = ((height - containerHeight) / 2f).coerceAtLeast(0f)
+    // 平移上限和手势用的是同一个函数，两处必须一致
+    val (maxX, maxY) = wallpaperMaxOffsetFraction(
+        scale = safeScale,
+        imageWidth = imageWidth,
+        imageHeight = imageHeight,
+        containerWidth = containerWidth,
+        containerHeight = containerHeight
+    )
 
     return WallpaperFrame(
         widthPx = width,
         heightPx = height,
-        txPx = (offsetX * containerWidth).coerceIn(-maxTx, maxTx),
-        tyPx = (offsetY * containerHeight).coerceIn(-maxTy, maxTy)
+        txPx = offsetX.coerceIn(-maxX, maxX) * containerWidth,
+        tyPx = offsetY.coerceIn(-maxY, maxY) * containerHeight
     )
 }
