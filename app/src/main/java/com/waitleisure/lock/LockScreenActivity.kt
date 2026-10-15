@@ -160,11 +160,18 @@ class LockScreenActivity : ComponentActivity() {
     }
 
     /**
-     * 状态栏/导航栏图标改成白色。
+     * 状态栏/导航栏图标改成白色，并且**把系统状态栏藏掉**。
      *
      * 锁机页背景都是深色或暗图，深色图标看不清；而且「浅色外观」还会让系统
      * 在状态栏铺一层白底 —— 那正是用户看到的「状态栏有时完全变成白底」。
      * 所以这里显式清掉 LIGHT 标志位。
+     *
+     * 关于隐藏：锁机页顶部那条（时间/电量/信号）是**我们自己画的**
+     * （Compose 里的 OverlayStatusBar），悬浮窗和锁机页 Activity 用的是同一个。
+     * 正常情况下悬浮窗盖在系统状态栏之上，只看得见我们那条；但悬浮窗不在、
+     * 锁机页 Activity 单独在前台时（比如收起下拉栏之后），系统那条也露出来了，
+     * 于是**两条状态栏同时出现** —— 用户反馈的「有时候双状态栏」就是这个。
+     * 在这里把系统的藏掉，两种情况下就都只剩我们那条了。
      *
      * **必须在 setContent 之后调用。** window.insetsController 内部要拿 DecorView，
      * 而 DecorView 是在 setContentView 时才创建的 —— 放在 onCreate 开头会直接
@@ -180,7 +187,13 @@ class LockScreenActivity : ComponentActivity() {
                     WindowInsetsController.APPEARANCE_LIGHT_STATUS_BARS or
                         WindowInsetsController.APPEARANCE_LIGHT_NAVIGATION_BARS
                 )
+                // 藏掉系统状态栏，避免和我们自己画的那条重复
+                window.insetsController?.hide(android.view.WindowInsets.Type.statusBars())
             }
+        } else {
+            @Suppress("DEPRECATION")
+            window.decorView.systemUiVisibility =
+                window.decorView.systemUiVisibility or android.view.View.SYSTEM_UI_FLAG_FULLSCREEN
         }
     }
 
