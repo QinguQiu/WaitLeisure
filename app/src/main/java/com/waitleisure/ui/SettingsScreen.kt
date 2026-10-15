@@ -1,6 +1,7 @@
 package com.waitleisure.ui
 
 import android.content.Context
+import android.graphics.BitmapFactory
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.background
@@ -42,6 +43,8 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.ImageBitmap
+import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
@@ -74,18 +77,27 @@ fun SettingsScreen(onOpenTasks: () -> Unit = {}) {
     var showQuickEdit by remember { mutableStateOf(false) }
     var pinSet by remember { mutableStateOf(!Repos.prefs.pinHash.isNullOrEmpty()) }
 
-    // 壁纸图片选择：选完复制到应用私有目录，锁机页直接读文件
+    // 选好但还没确认取景的壁纸。非空 = 取景页开着。
+    var pendingWallpaperCrop by remember { mutableStateOf<ImageBitmap?>(null) }
+
+    // 壁纸图片选择：选完复制到应用私有目录，然后**立刻弹出取景页**，
+    // 让用户自己决定显示哪一块（默认是居中裁切填满）。
     val wallpaperPicker = rememberLauncherForActivityResult(
         ActivityResultContracts.GetContent()
     ) { uri ->
         if (uri != null) {
-            runCatching {
+            val decoded = runCatching {
                 val file = File(context.filesDir, "wallpaper.jpg")
                 context.contentResolver.openInputStream(uri)?.use { input ->
                     FileOutputStream(file).use { output -> input.copyTo(output) }
                 }
                 Repos.prefs.wallpaperImagePath = file.absolutePath
-            }
+                // 换了图，上一张图的缩放/偏移必须清掉 ——
+                // 否则新图会莫名其妙地被放大、偏到一边
+                Repos.prefs.resetWallpaperFraming()
+                BitmapFactory.decodeFile(file.absolutePath)?.asImageBitmap()
+            }.getOrNull()
+            if (decoded != null) pendingWallpaperCrop = decoded
         }
     }
 
@@ -183,6 +195,8 @@ fun SettingsScreen(onOpenTasks: () -> Unit = {}) {
                             .clickable {
                                 Repos.prefs.wallpaperColor = c.toArgb()
                                 Repos.prefs.wallpaperImagePath = null
+                                // 换回纯色也把取景清掉，下次选图从默认裁切开始
+                                Repos.prefs.resetWallpaperFraming()
                             }
                     )
                 }
@@ -193,7 +207,21 @@ fun SettingsScreen(onOpenTasks: () -> Unit = {}) {
                     Text(if (Repos.prefs.wallpaperImagePath == null) "选择图片…" else "换一张图片…")
                 }
                 if (Repos.prefs.wallpaperImagePath != null) {
-                    TextButton(onClick = { Repos.prefs.wallpaperImagePath = null }) {
+                    // 对同一张图重新取景。选图时是自动弹的，这个是事后想再调。
+                    TextButton(onClick = {
+                        val p = Repos.prefs.wallpaperImagePath
+                        if (p != null) {
+                            runCatching { BitmapFactory.decodeFile(p)?.asImageBitmap() }
+                                .getOrNull()
+                                ?.let { pendingWallpaperCrop = it }
+                        }
+                    }) {
+                        Text("调整取景…")
+                    }
+                    TextButton(onClick = {
+                        Repos.prefs.wallpaperImagePath = null
+                        Repos.prefs.resetWallpaperFraming()
+                    }) {
                         Text("恢复纯色")
                     }
                 }
@@ -233,6 +261,24 @@ fun SettingsScreen(onOpenTasks: () -> Unit = {}) {
                 Repos.prefs.pinHash = Pin.hash(pin)
                 pinSet = true
                 showPinDialog = false
+            }
+        )
+    }
+
+    // 壁纸取景页。选完图自动弹；也可以事后点「调整取景…」再调。
+    // 取消时什么都不写 —— 图片文件已经复制过去了，但取景保持原样。
+    pendingWallpaperCrop?.let { bmp ->
+        WallpaperCropDialog(
+            bitmap = bmp,
+            initialScale = Repos.prefs.wallpaperScale,
+            initialOffsetX = Repos.prefs.wallpaperOffsetX,
+            initialOffsetY = Repos.prefs.wallpaperOffsetY,
+            onCancel = { pendingWallpaperCrop = null },
+            onConfirm = { scale, ox, oy ->
+                Repos.prefs.wallpaperScale = scale
+                Repos.prefs.wallpaperOffsetX = ox
+                Repos.prefs.wallpaperOffsetY = oy
+                pendingWallpaperCrop = null
             }
         )
     }

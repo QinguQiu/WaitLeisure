@@ -65,6 +65,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.blur
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.input.pointer.pointerInput
@@ -311,6 +312,16 @@ private fun LockScreen(
         }
     }
 
+    // 壁纸取景：用户在设置页的裁切界面自己拖/缩放选出来的。
+    // 默认 (1.0, 0, 0) = 就用 ContentScale.Crop 的基准画面（居中裁切填满），
+    // 和这个功能出现之前的表现完全一致。
+    //
+    // 这里刻意**不用 remember** —— 用户改完取景回到锁机页要立刻看到效果。
+    // 三个都是 SharedPreferences 读内存缓存，开销可以忽略。
+    val wallpaperScale = Repos.prefs.wallpaperScale
+    val wallpaperOffsetX = Repos.prefs.wallpaperOffsetX
+    val wallpaperOffsetY = Repos.prefs.wallpaperOffsetY
+
     val pagerState = rememberPagerState(pageCount = { 3 })
 
     // 模糊度跟着滑动位置走：中间那页（应用页）最糊，时间页/退出页清晰，
@@ -331,6 +342,15 @@ private fun LockScreen(
                 contentScale = ContentScale.Crop,
                 modifier = Modifier
                     .fillMaxSize()
+                    // 取景：Crop 打底，再叠缩放 + 平移。
+                    // 平移量按屏幕尺寸换算（存的是倍数），和裁切预览页用同一套算法，
+                    // 所以预览里看到什么，这里就是什么。
+                    .graphicsLayer {
+                        scaleX = wallpaperScale
+                        scaleY = wallpaperScale
+                        translationX = wallpaperOffsetX * size.width
+                        translationY = wallpaperOffsetY * size.height
+                    }
                     .then(if (canBlur) Modifier.blur(blurDp) else Modifier)
             )
             if (!canBlur) {

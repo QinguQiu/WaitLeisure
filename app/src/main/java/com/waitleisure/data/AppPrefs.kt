@@ -63,6 +63,45 @@ class AppPrefs(context: Context) {
         get() = sp.getString(KEY_WALLPAPER_IMAGE, null)
         set(value) = sp.edit().putString(KEY_WALLPAPER_IMAGE, value).apply()
 
+    // ------------------------------------------------------------------
+    // 壁纸取景（用户在裁切页自己拖/缩放选出来的）
+    //
+    // 基准是 ContentScale.Crop —— 也就是「先按屏幕比例居中裁切填满」。
+    // 用户的操作叠加在这个基准之上：
+    //
+    //   scale     缩放倍数，1.0 = 就用基准裁切，只能 ≥ 1
+    //   offsetX/Y 平移量，单位是**屏幕宽/高的倍数**（不是像素）
+    //
+    // 存屏幕倍数而不是像素，是因为裁切预览框和真正的锁机页尺寸不同
+    // （预览可能是 1080x2400，锁机页也是，但不能假设）；归一化之后
+    // 两边用同一组数值算出来的画面就是同一个。
+    //
+    // 取值范围：|offset| ≤ (scale - 1) / 2 —— 再往外拖就露背景了。
+    // 这个约束在裁切页和渲染处都用同一个函数算，见 wallpaperMaxOffset。
+    // ------------------------------------------------------------------
+
+    /** 壁纸缩放倍数，1.0 = 默认裁切。 */
+    var wallpaperScale: Float
+        get() = sp.getFloat(KEY_WALLPAPER_SCALE, 1f)
+        set(value) = sp.edit().putFloat(KEY_WALLPAPER_SCALE, value).apply()
+
+    /** 壁纸横向平移，单位是屏幕宽度的倍数。 */
+    var wallpaperOffsetX: Float
+        get() = sp.getFloat(KEY_WALLPAPER_OFFSET_X, 0f)
+        set(value) = sp.edit().putFloat(KEY_WALLPAPER_OFFSET_X, value).apply()
+
+    /** 壁纸纵向平移，单位是屏幕高度的倍数。 */
+    var wallpaperOffsetY: Float
+        get() = sp.getFloat(KEY_WALLPAPER_OFFSET_Y, 0f)
+        set(value) = sp.edit().putFloat(KEY_WALLPAPER_OFFSET_Y, value).apply()
+
+    /** 换壁纸时把取景一并重置，否则新图会套用旧图的缩放/偏移。 */
+    fun resetWallpaperFraming() {
+        wallpaperScale = 1f
+        wallpaperOffsetX = 0f
+        wallpaperOffsetY = 0f
+    }
+
     /** 白名单分组，JSON 数组字符串（用系统自带的 org.json）。 */
     var whitelistGroupsJson: String
         get() = sp.getString(KEY_GROUPS, "[]") ?: "[]"
@@ -148,6 +187,9 @@ class AppPrefs(context: Context) {
         // KEY_QUICK_DURATIONS 已随「立即锁机常用时长」一并删除
         const val KEY_WALLPAPER_COLOR = "wallpaper_color"
         const val KEY_WALLPAPER_IMAGE = "wallpaper_image"
+        const val KEY_WALLPAPER_SCALE = "wallpaper_scale"
+        const val KEY_WALLPAPER_OFFSET_X = "wallpaper_offset_x"
+        const val KEY_WALLPAPER_OFFSET_Y = "wallpaper_offset_y"
         const val KEY_GROUPS = "whitelist_groups"
     const val KEY_TASKS = "tasks"
     const val KEY_ACTIVE_GROUP = "active_whitelist_group"
@@ -158,8 +200,22 @@ class AppPrefs(context: Context) {
         const val KEY_POMODORO_STATE = "pomodoro_state"
         const val KEY_WHITELIST_GRID = "whitelist_grid"
         const val KEY_HOLIDAY_DISMISSED_YEAR = "holiday_dismissed_year"
+
         // DEFAULT_QUICK_DURATIONS 已随「立即锁机常用时长」一并删除
         const val DEFAULT_WALLPAPER_COLOR = 0xFF000000.toInt()
         const val DEFAULT_POMODORO = "4,25,5,15,2"
     }
 }
+
+/**
+ * 给定缩放倍数，允许的最大平移量（单位是屏幕宽/高的倍数）。
+ *
+ * 基准裁切（Crop）时图片刚好铺满屏幕；放大 z 倍之后每边多出 (z-1)/2 个屏幕，
+ * 所以最多也就能往两边各推这么多 —— 再多就露背景了。
+ * 裁切页和锁机页渲染共用这一个函数，保证「预览里拖到边界」和「锁机页实际显示」
+ * 严格对应。
+ *
+ * 放成顶层函数而不是 AppPrefs 的伴生对象里：那个 companion 是 private 的，
+ * 外面（ui / lock 包）访问不到。
+ */
+fun wallpaperMaxOffset(scale: Float): Float = ((scale - 1f) / 2f).coerceAtLeast(0f)
