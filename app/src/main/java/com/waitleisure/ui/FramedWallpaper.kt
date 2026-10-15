@@ -6,6 +6,8 @@ import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.requiredSize
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clipToBounds
@@ -92,15 +94,31 @@ fun FramedWallpaper(
         // 挂在图片上的话坐标要按图片尺寸换算，容易搞错；挂在容器上，
         // pan 直接除以容器尺寸就是归一化偏移。
         if (onTransform != null && containerW > 0f && containerH > 0f) {
+
+            // ⚠️ 必须用 rememberUpdatedState 包一层。
+            //
+            // pointerInput(Unit) 的 key 是 Unit —— 这个块**组合一次后就再也不会重启**。
+            // 直接引用外面那几个参数的话，lambda 里拿到的永远是**首次组合时**的值：
+            // 第一次拖动看着正常，一松手再拖，它又从最初的偏移开始算 ——
+            // 表现就是「往回弹、根本拖不动」（用户反馈的原话）。
+            //
+            // rememberUpdatedState 给的是同一个 State 对象，每次重组只更新 .value，
+            // 所以 lambda 里读到的始终是当前值。
+            val liveScale by rememberUpdatedState(scale)
+            val liveOffsetX by rememberUpdatedState(offsetX)
+            val liveOffsetY by rememberUpdatedState(offsetY)
+            val liveTransform by rememberUpdatedState(onTransform)
+
             androidx.compose.foundation.layout.Box(
                 modifier = Modifier
                     .matchParentSize()
                     .pointerInput(Unit) {
                         detectTransformGestures { _, pan, zoom, _ ->
-                            onTransform(
-                                (scale * zoom).coerceIn(1f, maxScale),
-                                offsetX + pan.x / containerW,
-                                offsetY + pan.y / containerH
+                            // pan 是「相对上一次事件」的位移增量，所以这里是累加
+                            liveTransform(
+                                (liveScale * zoom).coerceIn(1f, maxScale),
+                                liveOffsetX + pan.x / containerW,
+                                liveOffsetY + pan.y / containerH
                             )
                         }
                     }

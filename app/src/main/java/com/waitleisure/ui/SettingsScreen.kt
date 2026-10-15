@@ -79,25 +79,28 @@ fun SettingsScreen(onOpenTasks: () -> Unit = {}) {
 
     // 选好但还没确认取景的壁纸。非空 = 取景页开着。
     var pendingWallpaperCrop by remember { mutableStateOf<ImageBitmap?>(null) }
+    // 这次取景是「选了新图」还是「调老图」。新图要等确认才落盘。
+    var pendingIsNewImage by remember { mutableStateOf(false) }
 
-    // 壁纸图片选择：选完复制到应用私有目录，然后**立刻弹出取景页**，
-    // 让用户自己决定显示哪一块（默认是居中裁切填满）。
+    // 壁纸图片选择：先落到**临时文件**，再弹取景页。
+    //
+    // 为什么要临时文件：以前是选完直接覆盖 wallpaper.jpg，于是用户在取景页
+    // 点「取消」也回天乏术 —— 旧壁纸已经被冲掉了。现在取消 = 什么都没发生。
     val wallpaperPicker = rememberLauncherForActivityResult(
         ActivityResultContracts.GetContent()
     ) { uri ->
         if (uri != null) {
             val decoded = runCatching {
-                val file = File(context.filesDir, "wallpaper.jpg")
+                val tmp = File(context.filesDir, PENDING_WALLPAPER)
                 context.contentResolver.openInputStream(uri)?.use { input ->
-                    FileOutputStream(file).use { output -> input.copyTo(output) }
+                    FileOutputStream(tmp).use { output -> input.copyTo(output) }
                 }
-                Repos.prefs.wallpaperImagePath = file.absolutePath
-                // 换了图，上一张图的缩放/偏移必须清掉 ——
-                // 否则新图会莫名其妙地被放大、偏到一边
-                Repos.prefs.resetWallpaperFraming()
-                BitmapFactory.decodeFile(file.absolutePath)?.asImageBitmap()
+                BitmapFactory.decodeFile(tmp.absolutePath)?.asImageBitmap()
             }.getOrNull()
-            if (decoded != null) pendingWallpaperCrop = decoded
+            if (decoded != null) {
+                pendingWallpaperCrop = decoded
+                pendingIsNewImage = true
+            }
         }
     }
 
@@ -213,7 +216,10 @@ fun SettingsScreen(onOpenTasks: () -> Unit = {}) {
                         if (p != null) {
                             runCatching { BitmapFactory.decodeFile(p)?.asImageBitmap() }
                                 .getOrNull()
-                                ?.let { pendingWallpaperCrop = it }
+                                ?.let {
+                                    pendingWallpaperCrop = it
+                                    pendingIsNewImage = false
+                                }
                         }
                     }) {
                         Text("调整取景…")
@@ -266,23 +272,48 @@ fun SettingsScreen(onOpenTasks: () -> Unit = {}) {
     }
 
     // 壁纸取景页。选完图自动弹；也可以事后点「调整取景…」再调。
-    // 取消时什么都不写 —— 图片文件已经复制过去了，但取景保持原样。
     pendingWallpaperCrop?.let { bmp ->
         WallpaperCropDialog(
             bitmap = bmp,
-            initialScale = Repos.prefs.wallpaperScale,
-            initialOffsetX = Repos.prefs.wallpaperOffsetX,
-            initialOffsetY = Repos.prefs.wallpaperOffsetY,
-            onCancel = { pendingWallpaperCrop = null },
-            onConfirm = { scale, ox, oy ->
-                Repos.prefs.wallpaperScale = scale
-                Repos.prefs.wallpaperOffsetX = ox
-                Repos.prefs.wallpaperOffsetY = oy
+            initialScale = if (pendingIsNewImage) 1f else Repos.prefs.wallpaperScale,
+            initialOffsetX = if (pendingIsNewImage) 0f else Repos.prefs.wallpaperOffsetX,
+            initialOffsetY = if (pendingIsNewImage) 0f else Repos.prefs.wallpaperOffsetY,
+            onCancel = {
+                // 取消 = 什么都没发生。选了新图的话把临时文件删掉，
+                // 原来的壁纸原样保留（这是以前做不到的）。
+                if (pendingIsNewImage) {
+                    runCatching { File(context.filesDir, PENDING_WALLPAPER).delete() }
+                }
                 pendingWallpaperCrop = null
+                pendingIsNewImage = false
+            },
+            onConfirm = { scale, ox, oy ->
+                runCatching {
+                    if (pendingIsNewImage) {
+                        // 确认了才把临时文件转正
+                        val dst = File(context.filesDir, "wallpaper.jpg")
+                        val tmp = File(context.filesDir, PENDING_WALLPAPER)
+                        if (tmp.exists()) {
+                            dst.delete()
+                            tmp.renameTo(dst)
+                        }
+                        Repos.prefs.wallpaperImagePath = dst.absolutePath
+                        // 换了图，上一张的缩放/偏移必须清掉
+                        Repos.prefs.resetWallpaperFraming()
+                    }
+                    Repos.prefs.wallpaperScale = scale
+                    Repos.prefs.wallpaperOffsetX = ox
+                    Repos.prefs.wallpaperOffsetY = oy
+                }
+                pendingWallpaperCrop = null
+                pendingIsNewImage = false
             }
         )
     }
 }
+
+/** 待确认的壁纸临时文件名。确认后 rename 成 wallpaper.jpg。 */
+private const val PENDING_WALLPAPER = "wallpaper-pending.jpg"
 
 // ---------------------------------------------------------------- 常量 / 工具
 
