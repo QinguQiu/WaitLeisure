@@ -10,6 +10,8 @@ import android.net.NetworkCapabilities
 import android.os.BatteryManager
 import android.os.Build
 import android.os.Bundle
+import android.os.Handler
+import android.os.Looper
 import android.view.WindowInsetsController
 import android.view.WindowManager
 import androidx.activity.ComponentActivity
@@ -448,13 +450,31 @@ private fun OverlayStatusBar(now: Long, modifier: Modifier = Modifier) {
                         if (dragged >= threshold) {
                             firedThisGesture = true
                             DiagLog.add("下拉栏", "识别到下拉手势，先撤遮罩再展开")
-                            // 先把自己（悬浮窗）撤掉再展开。
-                            // 实测：遮罩持有时 expandNotificationsPanel() 会返回成功但系统不理会 ——
-                            // 撤掉遮罩它就正常了。遮罩不在的这段时间由锁机 Activity 兜着，
-                            // 下拉栏收起后看门狗会在 1 秒内把遮罩补回来。
-                            LockOverlay.hide()
-                            val ok = expandNotificationShade(context)
-                            DiagLog.add("下拉栏", if (ok) "展开调用成功" else "展开调用失败")
+
+                            // 撤遮罩前**先把锁机页拉到前台当背景**。
+                            //
+                            // 为什么需要这一步：撤掉遮罩后，背后露出的是任务栈里的下一个
+                            // Activity。正常情况下锁机页就在那儿（实测窗口层级：
+                            // Launcher #14 < LockScreenActivity #15 < 悬浮窗 #1），
+                            // 但锁机页被系统回收过、只剩看门狗补盖的悬浮窗时，
+                            // 背后就是桌面 —— 用户看到的就是「锁机页下拉，背景闪成桌面」。
+                            //
+                            // 这里先把锁机页叫起来（有悬浮窗权限，后台启动 Activity 是放行的），
+                            // 等它上来再撤遮罩，背后就一定是锁机页。
+                            LockScreenActivity.show(context)
+
+                            Handler(Looper.getMainLooper()).postDelayed({
+                                // 实测：遮罩持有时 expandNotificationsPanel() 会返回成功但系统不理会 ——
+                                // 撤掉遮罩它才真的展开。
+                                LockOverlay.hide()
+                                val ok = expandNotificationShade(context)
+                                DiagLog.add("下拉栏", if (ok) "展开调用成功" else "展开调用失败")
+
+                                // ⚠️ 这里**不能**立刻把遮罩盖回来。
+                                // 试过 postDelayed(350) 补盖，结果遮罩把下拉栏整个挡住了 ——
+                                // 我们的悬浮窗实际压在下拉栏之上，遮罩在 = 下拉栏不可见。
+                                // 所以撤下后交给看门狗，等下拉栏收起、前台变回应用时再补盖。
+                            }, 220)
                         }
                     }
                 }
