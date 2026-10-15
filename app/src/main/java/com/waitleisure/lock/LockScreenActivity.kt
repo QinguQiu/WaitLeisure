@@ -359,13 +359,23 @@ private fun LockScreen(
             }
         }
 
-        // 自绘状态栏。悬浮窗铺满全屏之后系统状态栏的图标不再绘制
-        // （实测顶部整条都是壁纸、一个图标都没有），所以这一条必须自己补。
-        // 放在分页器之后 = 画在最上层，三页都能看到。
-        OverlayStatusBar(
-            now = now,
-            modifier = Modifier.align(Alignment.TopCenter)
-        )
+        // 顶部这条**只负责识别下拉手势**，不再画任何东西。
+        //
+        // 它以前是个自绘状态栏（时间/网络/电量）。当初加它的理由是
+        // 「悬浮窗铺满全屏后系统状态栏的图标不再绘制」—— 但这个判断只在
+        // 某些情况下成立，实际表现是两条状态栏叠着：
+        //
+        //   · 悬浮窗模式：我们的条画在 y=0，和系统条重合，看着像一条；
+        //   · 锁机页 Activity 模式：系统条在 y=0，我们的条被 WindowInsets
+        //     推到它下面 —— 真·两条。
+        //
+        // 而且真机实测（用户反馈）：在锁机页下拉通知栏之后，**系统状态栏会
+        // 出现并且不再消失**，和我们那条一直并排，很乱。
+        //
+        // 所以绘制部分全部去掉，统一用系统状态栏；这条退化成一个透明的
+        // 手势热区 —— 下拉展开通知栏的能力必须留着，锁机页整屏都是我们
+        // 的窗口，系统收不到这个手势。
+        StatusBarGestureStrip(modifier = Modifier.align(Alignment.TopCenter))
 
         // 页码指示点
         Row(
@@ -420,41 +430,45 @@ private fun expandNotificationShade(context: Context): Boolean = runCatching {
     false
 }
 
-/** 自绘状态栏：左边时间，右边网络类型 + 电量。
+/** 锁机页顶部的**手势热区**：只识别下拉，不画任何东西。
  *
- * 为什么要自己画：悬浮窗为了盖住状态栏区域（让壁纸连续）把窗口铺到了 y=0，
- * 而铺满之后系统状态栏的图标就不再绘制了 —— 实测顶部整条只剩壁纸。
- * 所以时间/网络/电量这三样必须自己补，不能再指望系统。
+ * 这里原本是个自绘状态栏（时间 / 网络 / 电量）。为什么现在不画了：
  *
- * 高度取系统状态栏的真实 inset，这样各家 ROM 的刘海/状态栏高度都能自适应；
- * 取不到时退到 28dp。
+ *   · 它和系统状态栏会叠成两条 —— 悬浮窗模式下刚好重合看不出，
+ *     锁机页 Activity 模式下系统条在 y=0、我们的条被 WindowInsets 推到
+ *     它下面，就是清清楚楚的两条；
+ *   · 用户实测：在锁机页下拉通知栏之后，系统状态栏会出现并且不再消失，
+ *     和我们那条一直并排着。
+ *
+ * 统一交给系统状态栏之后，两种模式表现一致，也不会再有两份。
+ *
+ * 但**手势必须留着**：锁机页整屏都是我们的窗口（悬浮窗是整屏可触摸的），
+ * 系统收不到「从顶部下拉」这个手势 —— 实测遮罩盖着时下拉栏根本拉不下来
+ * （y=0 / y=50 / y=400 三处都试过，全部无效）。矩形窗口没法做「局部触摸
+ * 透传」，所以只能在这一条上自己识别，再用 EXPAND_STATUS_BAR 权限主动展开。
+ * 「远离手机」也带这个权限，正是同一个原因。
+ *
+ * 高度仍取系统状态栏的真实 inset，各家 ROM 的刘海/状态栏高度都能自适应。
  */
 @Composable
-private fun OverlayStatusBar(now: Long, modifier: Modifier = Modifier) {
+private fun StatusBarGestureStrip(modifier: Modifier = Modifier) {
     val context = LocalContext.current
 
-    // 悬浮窗是整屏可触摸的，会把「从状态栏下拉」这个系统手势一起吃掉 ——
-    // 实测遮罩盖着时下拉栏根本拉不下来（y=0 / y=50 / y=400 三处都试过，全部无效）。
-    // 矩形窗口没法做「局部触摸透传」，所以换条路：在这一条上自己识别下拉手势，
-    // 用 EXPAND_STATUS_BAR 权限主动展开下拉栏。
-    // 展开后下拉栏在悬浮窗**之上**（base layer 151000 > 111000），可以正常操作。
-    // 「远离手机」也带这个权限，正是同一个原因。
-    var dragged by remember { mutableFloatStateOf(0f) }
     // 一次手势只展开一次。
     // 之前没这个闸门，结果是每个 MOVE 事件累加过阈值就调一次 —— 实测一次下拉触发了 11 次
     // expandNotificationsPanel()，反复展开互相打断，最后停在收起状态，看起来就是「没反应」。
+    var dragged by remember { mutableFloatStateOf(0f) }
     var firedThisGesture by remember { mutableStateOf(false) }
     val threshold = with(LocalDensity.current) { 36.dp.toPx() }
 
-    val battery = rememberBatteryPercent()
-    val network = rememberNetworkLabel(now)
     val inset = WindowInsets.statusBars.asPaddingValues().calculateTopPadding()
-    val barHeight = if (inset > 0.dp) inset else 28.dp
+    val stripHeight = if (inset > 0.dp) inset else 28.dp
 
-    Row(
+    // 空 Box：只有手势，没有内容
+    Box(
         modifier = modifier
             .fillMaxWidth()
-            .height(barHeight)
+            .height(stripHeight)
             .pointerInput(Unit) {
                 detectVerticalDragGestures(
                     onDragStart = {
@@ -498,41 +512,17 @@ private fun OverlayStatusBar(now: Long, modifier: Modifier = Modifier) {
                     }
                 }
             }
-            .padding(horizontal = 22.dp),
-        verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.SpaceBetween
-    ) {
-        Text(
-            text = remember(now) {
-                SimpleDateFormat("HH:mm", Locale.getDefault()).format(Date(now))
-            },
-            color = Color.White,
-            fontSize = 14.sp,
-            fontWeight = FontWeight.Medium
-        )
-
-        Row(
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(8.dp)
-        ) {
-            if (network.isNotEmpty()) {
-                Text(
-                    text = network,
-                    color = Color.White.copy(alpha = 0.9f),
-                    fontSize = 12.sp
-                )
-            }
-            Text(
-                text = if (battery in 0..100) "$battery%" else "--",
-                color = Color.White,
-                fontSize = 14.sp,
-                fontWeight = FontWeight.Medium
-            )
-        }
-    }
+    )
 }
 
+// ---------------------------------------------------------------------------
+// 下面两个是退役的自绘状态栏用的辅助函数。
+// 自绘状态栏已经去掉（改用系统状态栏，见 StatusBarGestureStrip 的说明），
+// 所以它们暂时没有调用方 —— 留着方便以后要回来，用 @Suppress 压掉「未使用」告警。
+// ---------------------------------------------------------------------------
+
 /** 电量百分比。ACTION_BATTERY_CHANGED 是粘性广播，注册时就能拿到当前值。 */
+@Suppress("unused")
 @Composable
 private fun rememberBatteryPercent(): Int {
     val context = LocalContext.current
@@ -564,6 +554,7 @@ private fun rememberBatteryPercent(): Int {
 }
 
 /** 网络类型。跟着 now 每秒重算，连断网也能及时反映。 */
+@Suppress("unused")
 @Composable
 private fun rememberNetworkLabel(now: Long): String {
     val context = LocalContext.current
@@ -584,7 +575,8 @@ private fun rememberNetworkLabel(now: Long): String {
 
 /** 第一页：时间 + 倒计时。背景保持清晰。 */
 @Composable
-private fun TimePage(now: Long) {    Column(
+private fun TimePage(now: Long) {
+        Column(
         modifier = Modifier
             .fillMaxSize()
             .padding(horizontal = 24.dp),
