@@ -4,7 +4,7 @@ import androidx.compose.foundation.Image
 import androidx.compose.foundation.gestures.detectTransformGestures
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.offset
-import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.requiredSize
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -72,11 +72,19 @@ fun FramedWallpaper(
             contentScale = ContentScale.FillBounds,
             modifier = Modifier
                 .align(Alignment.Center)
-                .offset { IntOffset(frame.txPx.roundToInt(), frame.tyPx.roundToInt()) }
-                .size(
+                // ⚠️ 必须用 requiredSize 而不是 size。
+                //
+                // size() 会**把请求的尺寸夹进父容器的约束里**：图片比屏幕宽时，
+                // 宽度被夹成屏幕宽、高度却不受影响 —— 宽高比就此被破坏，
+                // 再配上 FillBounds 就成了「图片被拉伸变形」（用户反馈）。
+                //
+                // requiredSize 忽略父约束，量出来就是我们要的尺寸；
+                // 超出的部分由外层的 clipToBounds 裁掉。
+                .requiredSize(
                     width = with(density) { frame.widthPx.toDp() },
                     height = with(density) { frame.heightPx.toDp() }
                 )
+                .offset { IntOffset(frame.txPx.roundToInt(), frame.tyPx.roundToInt()) }
                 .then(imageModifier)
         )
 
