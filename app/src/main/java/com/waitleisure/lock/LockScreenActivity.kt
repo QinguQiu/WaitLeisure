@@ -81,6 +81,7 @@ import androidx.core.content.ContextCompat
 import androidx.core.graphics.drawable.toBitmap
 import com.waitleisure.R
 import com.waitleisure.data.Repos
+import com.waitleisure.data.wallpaperMaxOffset
 import com.waitleisure.ui.AppIcon
 import com.waitleisure.ui.rememberAppLabel
 import com.waitleisure.util.DiagLog
@@ -343,13 +344,20 @@ private fun LockScreen(
                 modifier = Modifier
                     .fillMaxSize()
                     // 取景：Crop 打底，再叠缩放 + 平移。
-                    // 平移量按屏幕尺寸换算（存的是倍数），和裁切预览页用同一套算法，
-                    // 所以预览里看到什么，这里就是什么。
+                    // 平移量按屏幕尺寸换算（存的是倍数），越界收敛用和取景页
+                    // 同一个 wallpaperMaxOffset()，所以预览里看到什么这里就是什么。
                     .graphicsLayer {
+                        val (maxX, maxY) = wallpaperMaxOffset(
+                            scale = wallpaperScale,
+                            imageWidth = wallpaper.width,
+                            imageHeight = wallpaper.height,
+                            containerWidth = size.width,
+                            containerHeight = size.height
+                        )
                         scaleX = wallpaperScale
                         scaleY = wallpaperScale
-                        translationX = wallpaperOffsetX * size.width
-                        translationY = wallpaperOffsetY * size.height
+                        translationX = wallpaperOffsetX.coerceIn(-maxX, maxX) * size.width
+                        translationY = wallpaperOffsetY.coerceIn(-maxY, maxY) * size.height
                     }
                     .then(if (canBlur) Modifier.blur(blurDp) else Modifier)
             )

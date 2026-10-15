@@ -208,14 +208,49 @@ class AppPrefs(context: Context) {
 }
 
 /**
- * 给定缩放倍数，允许的最大平移量（单位是屏幕宽/高的倍数）。
+ * 算出当前取景下，横向/纵向各最多能平移多少（单位是容器宽/高的倍数）。
  *
- * 基准裁切（Crop）时图片刚好铺满屏幕；放大 z 倍之后每边多出 (z-1)/2 个屏幕，
- * 所以最多也就能往两边各推这么多 —— 再多就露背景了。
- * 裁切页和锁机页渲染共用这一个函数，保证「预览里拖到边界」和「锁机页实际显示」
- * 严格对应。
+ * ## 为什么不是简单地 (scale - 1) / 2
  *
- * 放成顶层函数而不是 AppPrefs 的伴生对象里：那个 companion 是 private 的，
- * 外面（ui / lock 包）访问不到。
+ * 第一版就是这么写的，结果是 **1.0× 时完全拖不动** —— 用户反馈「1.0 移动不了
+ * 有问题」，说得对。原因：基准不是「图片刚好等于屏幕」，而是 ContentScale.Crop
+ * 的覆盖缩放：
+ *
+ *     基准缩放 crop = max(容器宽 / 图宽, 容器高 / 图高)
+ *
+ * 它保证图片**盖住**容器，于是**溢出的那个方向本来就有富余**：
+ * 竖图放进竖屏，宽度方向通常刚好贴合（没得拖），高度方向却多出一大截（能拖）。
+ * 把这些富余算进去，1.0× 自然就能沿溢出方向拖动。
+ *
+ * 公式：图片画出来的尺寸 = 图尺寸 × crop × scale
+ *       可平移量 = (画出来的尺寸 / 容器尺寸 - 1) / 2
+ *
+ * 取景页和锁机页渲染共用这一个函数 —— 预览里能拖到哪，锁机页就显示到哪。
+ * （放成顶层函数而不是 AppPrefs 的伴生对象里：那个 companion 是 private 的，
+ * 外面 ui / lock 包访问不到，编译会报 Cannot access 'companion object'。）
+ *
+ * @return (最大横向平移, 最大纵向平移)，均为容器宽/高的倍数，且 ≥ 0
  */
-fun wallpaperMaxOffset(scale: Float): Float = ((scale - 1f) / 2f).coerceAtLeast(0f)
+fun wallpaperMaxOffset(
+    scale: Float,
+    imageWidth: Int,
+    imageHeight: Int,
+    containerWidth: Float,
+    containerHeight: Float
+): Pair<Float, Float> {
+    if (imageWidth <= 0 || imageHeight <= 0 || containerWidth <= 0f || containerHeight <= 0f) {
+        return 0f to 0f
+    }
+    val iw = imageWidth.toFloat()
+    val ih = imageHeight.toFloat()
+
+    // Crop 的基准缩放：取较大的那个比例，保证两个方向都盖住容器
+    val crop = maxOf(containerWidth / iw, containerHeight / ih)
+
+    val drawnW = iw * crop * scale
+    val drawnH = ih * crop * scale
+
+    val maxX = ((drawnW / containerWidth - 1f) / 2f).coerceAtLeast(0f)
+    val maxY = ((drawnH / containerHeight - 1f) / 2f).coerceAtLeast(0f)
+    return maxX to maxY
+}
