@@ -1,4 +1,4 @@
-﻿# WaitLeisure（等闲）工程静态校验
+# WaitLeisure（等闲）工程静态校验
 #
 # 在没有 Android SDK / Gradle 的机器上，用纯 PowerShell 校验那些
 # 「不写出来编译器就会报错、但人眼很容易漏掉」的问题：
@@ -24,7 +24,24 @@ function Read-Text([string]$path) {
 }
 
 $root = $env:WAITLEISURE_ROOT
-if ([string]::IsNullOrEmpty($root)) { $root = Join-Path (Get-Location) "SelfLock" }
+if ([string]::IsNullOrEmpty($root)) {
+    # 没给环境变量时自己猜项目位置。
+    #
+    # 两种情况都要照顾到：
+    #   1. 从项目根目录跑（最常见）→ 当前目录本身就是项目
+    #   2. 从项目**外面**跑        → 当前目录下还有个同名子目录
+    #
+    # 判据用 settings.gradle.kts + app 目录同时存在，比猜名字可靠。
+    # （踩过：项目改名后这里还把新名字又拼了一次，
+    #   变成 E:\...\WaitLeisure\WaitLeisure，直接 ROOT NOT FOUND。）
+    $here = (Get-Location).Path
+    if ((Test-Path -LiteralPath (Join-Path $here "settings.gradle.kts")) -and
+        (Test-Path -LiteralPath (Join-Path $here "app"))) {
+        $root = $here
+    } else {
+        $root = Join-Path $here "WaitLeisure"
+    }
+}
 if (-not (Test-Path -LiteralPath $root)) { Write-Output "ROOT NOT FOUND: $root"; exit 1 }
 
 $main = Join-Path $root "app\src\main"
