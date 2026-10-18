@@ -255,7 +255,11 @@ fun SettingsScreen(onOpenTasks: () -> Unit = {}) {
                 },
                 placeholder = { Text("比如：专注当下，别刷手机") },
                 modifier = Modifier.fillMaxWidth(),
-                singleLine = true,
+                // 允许多行：签名常常是两句话，挤成一行读起来很累。
+                // 回车即换行，最多 4 行（再多就滚动，不占满屏幕）。
+                singleLine = false,
+                minLines = 2,
+                maxLines = 4,
                 supportingText = {
                     Text(
                         text = "${signature.length} / ${SIGNATURE_MAX_LENGTH}",

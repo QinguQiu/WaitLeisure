@@ -329,8 +329,11 @@ fun computeWallpaperFrame(
 /**
  * 个性签名的长度上限。
  *
+ * 允许换行（设置页里是多行输入框），所以给到 80 字 ——
+ * 40 字在单行时代够用，多行就不够了。
+ *
  * 放成**顶层常量**而不是 AppPrefs 的伴生对象里：那个 companion 是 private 的，
  * ui 包访问不到 —— 编译会报 Cannot access 'companion object'。
  * 这个坑踩过两次了（另一次是 wallpaperMaxOffset）。
  */
-const val SIGNATURE_MAX_LENGTH = 40
+const val SIGNATURE_MAX_LENGTH = 80
