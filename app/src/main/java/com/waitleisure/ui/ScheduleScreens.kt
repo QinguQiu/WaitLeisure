@@ -299,7 +299,7 @@ fun ScheduleEditScreen(scheduleId: Long, onDone: () -> Unit) {
         // 用任务的好处是常用锁法只配一次、多条规则复用。
         SectionCard(
             title = "锁什么",
-            subtitle = if (useTask) "执行任务" else "本规则自带时长"
+            subtitle = if (useTask) "执行任务" else "本规则自己定起止时刻"
         ) {
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 FilterChip(
