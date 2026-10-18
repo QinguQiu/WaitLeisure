@@ -72,6 +72,7 @@ import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.text.font.FontStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
@@ -636,6 +637,22 @@ private fun TimePage(now: Long) {
             color = Color(0xFFB0B0B0),
             fontSize = 13.sp
         )
+
+        // 个性签名：设置页里写的一句话。
+        // 留空就整块不显示 —— 不能只是画个空 Text，那样会白占一段高度。
+        val signature = Repos.prefs.signature
+        if (signature.isNotBlank()) {
+            Spacer(Modifier.height(20.dp))
+            Text(
+                text = signature,
+                color = Color(0xFFE6E6E6),
+                fontSize = 15.sp,
+                fontStyle = FontStyle.Italic,
+                textAlign = TextAlign.Center,
+                lineHeight = 22.sp,
+                modifier = Modifier.padding(horizontal = 8.dp)
+            )
+        }
 
         // 番茄钟进行中就顺带显示当前相位，省得用户猜现在能不能玩手机
         val pomo = Pomodoro.current()

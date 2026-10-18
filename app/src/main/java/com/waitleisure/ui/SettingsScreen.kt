@@ -53,6 +53,8 @@ import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.waitleisure.data.AppPrefs
+import com.waitleisure.data.SIGNATURE_MAX_LENGTH
 import com.waitleisure.data.Repos
 import com.waitleisure.data.WhitelistGroup
 import com.waitleisure.lock.Pomodoro
@@ -76,6 +78,9 @@ fun SettingsScreen(onOpenTasks: () -> Unit = {}) {
     var allowPinUnlock by remember { mutableStateOf(Repos.prefs.allowPinUnlock) }
     var showQuickEdit by remember { mutableStateOf(false) }
     var pinSet by remember { mutableStateOf(!Repos.prefs.pinHash.isNullOrEmpty()) }
+
+    // 个性签名：和 prefs 双向同步（每敲一个字就存，不必额外点保存）
+    var signature by remember { mutableStateOf(Repos.prefs.signature) }
 
     // 选好但还没确认取景的壁纸。非空 = 取景页开着。
     var pendingWallpaperCrop by remember { mutableStateOf<ImageBitmap?>(null) }
@@ -230,6 +235,41 @@ fun SettingsScreen(onOpenTasks: () -> Unit = {}) {
                     }) {
                         Text("恢复纯色")
                     }
+                }
+            }
+        }
+
+        // 个性签名：锁机页上显示的一句话。
+        // 放「锁机外观」这一组里 —— 它和壁纸一样，纯粹影响锁机页长什么样。
+        SectionCard(
+            title = "个性签名",
+            subtitle = if (Repos.prefs.signature.isBlank()) "留空则不显示" else "锁机页上会显示"
+        ) {
+            OutlinedTextField(
+                value = signature,
+                onValueChange = {
+                    // 限长：锁机页那一行放不下太长的句子，会挤到别的元素
+                    val v = it.take(SIGNATURE_MAX_LENGTH)
+                    signature = v
+                    Repos.prefs.signature = v
+                },
+                placeholder = { Text("比如：专注当下，别刷手机") },
+                modifier = Modifier.fillMaxWidth(),
+                singleLine = true,
+                supportingText = {
+                    Text(
+                        text = "${signature.length} / ${SIGNATURE_MAX_LENGTH}",
+                        fontSize = 11.sp
+                    )
+                }
+            )
+            if (signature.isNotBlank()) {
+                Spacer(Modifier.height(4.dp))
+                TextButton(onClick = {
+                    signature = ""
+                    Repos.prefs.signature = ""
+                }) {
+                    Text("清空")
                 }
             }
         }

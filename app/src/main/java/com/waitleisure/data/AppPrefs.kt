@@ -107,6 +107,15 @@ class AppPrefs(context: Context) {
         get() = sp.getString(KEY_GROUPS, "[]") ?: "[]"
         set(value) = sp.edit().putString(KEY_GROUPS, value).apply()
 
+    /**
+     * 个性签名：锁机页上显示的一句话（比如「专注当下，别刷手机」）。
+     *
+     * 空字符串 = 不显示，锁机页布局保持原样 —— 不会留出一块空白。
+     */
+    var signature: String
+        get() = sp.getString(KEY_SIGNATURE, "") ?: ""
+        set(value) = sp.edit().putString(KEY_SIGNATURE, value.take(SIGNATURE_MAX_LENGTH)).apply()
+
     /** 任务（预设锁法）：JSON 数组。空字符串表示「还没播种过」。 */
     var tasksJson: String
         get() = sp.getString(KEY_TASKS, "") ?: ""
@@ -185,6 +194,7 @@ class AppPrefs(context: Context) {
         const val KEY_ACTIVE_SCHEDULE = "active_schedule"
         const val KEY_ALLOW_PIN_UNLOCK = "allow_pin_unlock"
         // KEY_QUICK_DURATIONS 已随「立即锁机常用时长」一并删除
+        const val KEY_SIGNATURE = "signature"
         const val KEY_WALLPAPER_COLOR = "wallpaper_color"
         const val KEY_WALLPAPER_IMAGE = "wallpaper_image"
         const val KEY_WALLPAPER_SCALE = "wallpaper_scale"
@@ -315,3 +325,12 @@ fun computeWallpaperFrame(
         tyPx = offsetY.coerceIn(-maxY, maxY) * containerHeight
     )
 }
+
+/**
+ * 个性签名的长度上限。
+ *
+ * 放成**顶层常量**而不是 AppPrefs 的伴生对象里：那个 companion 是 private 的，
+ * ui 包访问不到 —— 编译会报 Cannot access 'companion object'。
+ * 这个坑踩过两次了（另一次是 wallpaperMaxOffset）。
+ */
+const val SIGNATURE_MAX_LENGTH = 40
