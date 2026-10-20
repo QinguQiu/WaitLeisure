@@ -231,7 +231,7 @@ fun ScheduleEditScreen(scheduleId: Long, onDone: () -> Unit) {
     val existing = remember(scheduleId) { Repos.schedules.byId(scheduleId) }
     val isNew = existing == null
 
-    var startMinutes by remember { mutableIntStateOf(existing?.startMinutes ?: (23 * 60)) }
+    var startMinutes by remember { mutableIntStateOf(existing?.startMinutes ?: 0) }
 
     // 「结束时间」而不是「设时长」。
     //

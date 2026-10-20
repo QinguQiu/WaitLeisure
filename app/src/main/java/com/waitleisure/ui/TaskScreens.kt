@@ -94,7 +94,7 @@ fun TaskListScreen(
                 )
             } else {
                 simple.forEach { t ->
-                    TaskRow(t, onEdit = { onEdit(t.id) }, onDelete = { deleting = t })
+                    TaskRow(t, onEdit = { onEdit(t.id) }, onCopy = { Repos.tasks.duplicate(t.id) }, onDelete = { deleting = t })
                 }
             }
             Spacer(Modifier.height(8.dp))
@@ -114,7 +114,7 @@ fun TaskListScreen(
                 )
             } else {
                 pomodoro.forEach { t ->
-                    TaskRow(t, onEdit = { onEdit(t.id) }, onDelete = { deleting = t })
+                    TaskRow(t, onEdit = { onEdit(t.id) }, onCopy = { Repos.tasks.duplicate(t.id) }, onDelete = { deleting = t })
                 }
             }
             Spacer(Modifier.height(8.dp))
@@ -147,7 +147,7 @@ fun TaskListScreen(
 }
 
 @Composable
-private fun TaskRow(task: Task, onEdit: () -> Unit, onDelete: () -> Unit) {
+private fun TaskRow(task: Task, onEdit: () -> Unit, onCopy: () -> Unit, onDelete: () -> Unit) {
     Row(
         modifier = Modifier
             .fillMaxWidth()
@@ -162,6 +162,7 @@ private fun TaskRow(task: Task, onEdit: () -> Unit, onDelete: () -> Unit) {
                 color = MaterialTheme.colorScheme.onSurfaceVariant
             )
         }
+        TextButton(onClick = onCopy) { Text("复制") }
         TextButton(onClick = onEdit) { Text("编辑") }
         TextButton(onClick = onDelete) {
             Text("删除", color = MaterialTheme.colorScheme.error)

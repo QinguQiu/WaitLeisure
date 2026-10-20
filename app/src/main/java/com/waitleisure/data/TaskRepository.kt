@@ -37,6 +37,26 @@ class TaskRepository(private val prefs: AppPrefs) {
 
     fun delete(id: Long) = persist(_tasks.value.filterNot { it.id == id })
 
+    /**
+     * 复制一个任务，返回新任务（找不到就返回 null）。
+     *
+     * 名字加「副本」后缀。连按两次复制会变成「副本 2」——
+     * 不加编号的话列表里会出现两个同名任务，根本分不清改的是哪个。
+     */
+    fun duplicate(id: Long): Task? {
+        val src = byId(id) ?: return null
+        val existingNames = _tasks.value.map { it.name }.toSet()
+        var name = src.name + " 副本"
+        var n = 2
+        while (name in existingNames) {
+            name = src.name + " 副本 " + n
+            n++
+        }
+        val copy = src.copy(id = nextId(), name = name)
+        upsert(copy)
+        return copy
+    }
+
     private fun persist(list: List<Task>) {
         prefs.tasksJson = toJson(list)
         _tasks.value = list
