@@ -40,10 +40,28 @@ object Pomodoro {
         )
     }
 
+    /**
+     * 一轮完整番茄钟跑完的总时长（分钟）：所有焦点 + 中间那些休息。
+     *
+     * 最后一次专注之后没有休息，所以休息次数 = rounds - 1；
+     * 第 N 个循环之后，N 能被 roundsPerSet 整除时是长休，否则短休
+     * （和 [tick] 里的判断一致）。
+     *
+     * 用途：定时规则挂番茄钟任务时，用它算「这条规则会锁多久」——
+     * 否则只能退回规则自己的结束时间，两套逻辑同时生效。
+     */
+    fun totalMinutes(config: String): Int {
+        val c = parse(config)
+        var total = c.rounds * c.focusMinutes
+        for (round in 1 until c.rounds) {
+            total += if (round % c.roundsPerSet == 0) c.longBreak else c.shortBreak
+        }
+        return total
+    }
+
     fun describe(s: String): String {
         val c = parse(s)
-        return "${c.rounds} 个循环 × ${c.focusMinutes} 分 · 短休 ${c.shortBreak} / 长休 ${c.longBreak} 分（每 ${c.roundsPerSet} 个循环）"
-    }
+        return "${c.rounds} 个循环 × ${c.focusMinutes} 分 · 短休 ${c.shortBreak} / 长休 ${c.longBreak} 分（每 ${c.roundsPerSet} 个循环）"    }
 
     /**
      * 当前**运行**用的配置字符串：优先本次运行覆盖的那份，否则用用户设置里那份。

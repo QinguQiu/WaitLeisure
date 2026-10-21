@@ -51,6 +51,7 @@ import com.waitleisure.R
 import com.waitleisure.alarm.AlarmScheduler
 import com.waitleisure.alarm.ScheduleRunner
 import com.waitleisure.data.Repos
+import com.waitleisure.lock.Pomodoro
 import com.waitleisure.model.DAY_LABELS
 import com.waitleisure.model.HolidayCalendar
 import com.waitleisure.model.HolidayMode
@@ -194,7 +195,13 @@ private fun ScheduleCard(
                     )
                     Spacer(Modifier.width(8.dp))
                     Text(
-                        text = "持续 ${schedule.durationMinutes.toDurationText()}",
+                        // 执行任务时「结束时间」不参与 —— 时长由任务决定。
+                        // 之前这里仍显示规则自己的时长，和任务同时"生效"，看着像两套规则打架。
+                        text = if (schedule.usesTask) {
+                            Repos.tasks.byId(schedule.taskId)?.let { "任务 · " + it.name } ?: "任务（已删除）"
+                        } else {
+                            "持续 " + schedule.durationMinutes.toDurationText()
+                        },
                         fontSize = 12.sp,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                         modifier = Modifier.padding(bottom = 4.dp)
@@ -209,12 +216,13 @@ private fun ScheduleCard(
                             append(it)
                             append("）")
                         }
-                        if (schedule.crossesMidnight) {
-                            append(" · 次日 ")
-                            append(schedule.endMinutes.toHhMm())
-                            append(" 解除")
-                        } else {
-                            append(" · ")
+                        // 执行任务时没有「解除时刻」可言（番茄钟按相位走，简单锁机按任务时长）
+                        if (!schedule.usesTask) {
+                            if (schedule.crossesMidnight) {
+                                append(" · 次日 ")
+                            } else {
+                                append(" · ")
+                            }
                             append(schedule.endMinutes.toHhMm())
                             append(" 解除")
                         }
@@ -669,8 +677,20 @@ private fun persistSchedule(context: Context, schedule: Schedule) {
     // 走 ScheduleRunner 而不是直接 LockController.lock —— 规则可能是「执行任务」，
     // 时长得由任务决定，两处各写一份迟早走歪。
     val task = if (schedule.usesTask) Repos.tasks.byId(schedule.taskId) else null
-    val windowMinutes = task?.takeIf { it.kind == TaskKind.SIMPLE_LOCK }?.durationMinutes
-        ?: schedule.durationMinutes
+
+    // 窗口长度怎么算：
+    //   执行任务 → 由**任务**决定，和规则自己的「结束时间」完全无关
+    //     · 简单锁机任务：任务里的时长
+    //     · 番茄钟任务  ：整轮跑完的总时长（焦点 + 休息）
+    //   自带时长 → 用规则自己的
+    //
+    // 之前番茄钟任务会退回 schedule.durationMinutes —— 于是「结束时间」和
+    // 「执行任务」两套同时在起作用，用户看到的窗口是错的。
+    val windowMinutes = when {
+        task == null -> schedule.durationMinutes
+        task.kind == TaskKind.SIMPLE_LOCK -> task.durationMinutes
+        else -> Pomodoro.totalMinutes(task.pomodoroConfig)
+    }
 
     val windowEnd = schedule.activeWindowEndMillis(durationOverride = windowMinutes)
     if (windowEnd != null) {
