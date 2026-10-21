@@ -315,7 +315,11 @@ fun HomeScreen(onOpenPermissions: () -> Unit) {
                 Repos.prefs.lastSimpleTaskId = t.id
                 showSimplePicker = false
                 if (Pomodoro.isActive()) Pomodoro.stop(context)
-                LockController.lock(context, System.currentTimeMillis() + t.durationMinutes * 60_000L)
+                LockController.lock(
+                                    context,
+                                    System.currentTimeMillis() + t.durationMinutes * 60_000L,
+                                    taskName = t.name
+                                )
                 refreshKey++
             },
             footer = {
@@ -344,7 +348,7 @@ fun HomeScreen(onOpenPermissions: () -> Unit) {
             onPick = { t ->
                 Repos.prefs.lastPomodoroTaskId = t.id
                 showPomodoroPicker = false
-                Pomodoro.start(context, configOverride = t.pomodoroConfig)
+                Pomodoro.start(context, configOverride = t.pomodoroConfig, taskName = t.name)
                 refreshKey++
             }
         )

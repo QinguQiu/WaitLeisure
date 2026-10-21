@@ -632,6 +632,20 @@ private fun TimePage(now: Long) {
 
         Spacer(Modifier.height(6.dp))
 
+        // 本次锁机是哪个任务触发的。
+        // 配了几套任务之后，光看「已锁定」分不清现在是「专注 25 分钟」
+        // 还是「深度锁机 2 小时」—— 这里直接写出来。
+        // 非任务触发的（手动锁 / 自带时长）就没有这一行。
+        val activeTask = Repos.prefs.activeTaskName
+        if (activeTask.isNotBlank()) {
+            Text(
+                text = "任务 · $activeTask",
+                color = Color(0xFFFFB74D),
+                fontSize = 12.sp
+            )
+            Spacer(Modifier.height(4.dp))
+        }
+
         Text(
             text = remainingText(now),
             color = Color(0xFFB0B0B0),

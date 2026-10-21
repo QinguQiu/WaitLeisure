@@ -72,14 +72,42 @@ object Pomodoro {
      *                        否则跑一次定时就把用户手配的参数改掉了。
      * @param whitelistGroupId 本次要额外放行的分组；-1 = 只用全局白名单。
      */
-    fun start(context: Context, configOverride: String? = null, whitelistGroupId: Long = -1L) {
+    fun start(
+        context: Context,
+        configOverride: String? = null,
+        whitelistGroupId: Long = -1L,
+        /**
+         * 本该开始的时刻（毫秒）。默认 null = 现在开始。
+         *
+         * 定时规则补执行时会传窗口起点 —— 20:55 设的 20:30 规则，
+         * 番茄钟要按 20:30 起算，剩下 5 分钟就该结束第一个专注，
+         * 而不是重新从满 25 分钟开始（用户实测反馈过）。
+         */
+        startAtMillis: Long? = null,
+        taskName: String = ""
+    ) {
         // 任务自带的配置只作用于本次运行，不改用户设置里那份
         Repos.prefs.pomodoroRunConfig = configOverride ?: ""
         val c = parse(activeConfig())
-        val end = System.currentTimeMillis() + c.focusMinutes * 60_000L
+        val now = System.currentTimeMillis()
+        // 起算点：有窗口起点就用它，但不能比"现在"还晚（未来时间没意义）
+        val base = startAtMillis?.coerceAtMost(now) ?: now
+        val end = base + c.focusMinutes * 60_000L
         Repos.prefs.pomodoroState = "1,focus,$end"
-        DiagLog.add("番茄", "开始：1/${c.rounds} 个循环专注 ${c.focusMinutes} 分")
-        LockController.lock(context, end, scheduleId = -1L, whitelistGroupId = whitelistGroupId)
+        DiagLog.add(
+            "番茄",
+            "开始：1/${c.rounds} 个循环专注 ${c.focusMinutes} 分" +
+                if (base < now) "（按窗口起点补算，已过 ${(now - base) / 60_000} 分）" else ""
+        )
+        // 给锁机一个"至少还能锁一会儿"的终点：如果补算下来这个相位已经结束，
+        // 交给 tick 去推进到下一个相位，这里不要用过去的时间点去 lock。
+        LockController.lock(
+            context,
+            maxOf(end, now + 60_000L),
+            scheduleId = -1L,
+            whitelistGroupId = whitelistGroupId,
+            taskName = taskName
+        )
     }
 
     /** 手动停止（用户主动中断）。 */

@@ -24,7 +24,8 @@ object LockController {
         context: Context,
         untilMillis: Long,
         scheduleId: Long = -1L,
-        whitelistGroupId: Long = -1L
+        whitelistGroupId: Long = -1L,
+        taskName: String = ""
     ) {
         Repos.ensure(context)
 
@@ -44,6 +45,8 @@ object LockController {
         // 分组本身不带生效时段了，「这次用哪一组」只能在这里记下来。
         // 必须写在启动服务之前 —— 服务一起来就会开始判白名单。
         Repos.prefs.activeWhitelistGroupId = whitelistGroupId
+        // 记下本次是哪个任务触发的 —— 锁机页要显示出来
+        Repos.prefs.activeTaskName = taskName
 
         Repos.lockState.lockUntil(untilMillis, scheduleId)
         startService(context)
@@ -59,6 +62,7 @@ object LockController {
         Repos.lockState.unlock()
         // 解锁就回到「只用全局白名单」。下次锁机时再由调用方重新指定分组。
         Repos.prefs.activeWhitelistGroupId = -1L
+        Repos.prefs.activeTaskName = ""
         stopService(context)
         // 手动解锁也算「锁机结束」—— 用户刚在锁机页输完密码，
         // 这时候把他送到 App 首页最自然。

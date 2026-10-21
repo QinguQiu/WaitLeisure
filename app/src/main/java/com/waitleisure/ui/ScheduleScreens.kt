@@ -660,7 +660,10 @@ private fun persistSchedule(context: Context, schedule: Schedule) {
 
     val windowEnd = schedule.activeWindowEndMillis(durationOverride = windowMinutes)
     if (windowEnd != null) {
-        val endAt = ScheduleRunner.execute(context, schedule)
+        // 窗口起点 = 窗口终点 - 时长。补执行时番茄钟按这个起点算，
+        // 已经过去的那段要扣掉，而不是重新从满时长开始。
+        val startAt = windowEnd - windowMinutes * 60_000L
+        val endAt = ScheduleRunner.execute(context, schedule, windowStartMillis = startAt)
         if (endAt != null) {
             AlarmScheduler.scheduleEnd(context, endAt, schedule.id)
         }

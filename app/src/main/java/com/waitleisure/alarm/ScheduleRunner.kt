@@ -29,7 +29,12 @@ object ScheduleRunner {
      *
      * @return 锁定结束时刻；返回 null 表示没有实际锁上（例如无障碍没开）
      */
-    fun execute(context: Context, schedule: Schedule, now: Long = System.currentTimeMillis()): Long? {
+    fun execute(
+        context: Context,
+        schedule: Schedule,
+        now: Long = System.currentTimeMillis(),
+        windowStartMillis: Long? = null
+    ): Long? {
         val groupId = schedule.whitelistGroupId
         val task = if (schedule.usesTask) Repos.tasks.byId(schedule.taskId) else null
 
@@ -42,7 +47,7 @@ object ScheduleRunner {
                 TaskKind.SIMPLE_LOCK -> {
                     val end = now + task.durationMinutes * 60_000L
                     DiagLog.add("规则", "执行任务「${task.name}」：锁到 " + fmt(end))
-                    LockController.lock(context, end, schedule.id, groupId)
+                    LockController.lock(context, end, schedule.id, groupId, taskName = task.name)
                     end
                 }
 
@@ -51,7 +56,9 @@ object ScheduleRunner {
                     Pomodoro.start(
                         context,
                         configOverride = task.pomodoroConfig,
-                        whitelistGroupId = groupId
+                        whitelistGroupId = groupId,
+                        startAtMillis = windowStartMillis,
+                        taskName = task.name
                     )
                     // 番茄钟的结束时刻由它自己的相位推进决定，这里给不出单一时刻
                     null

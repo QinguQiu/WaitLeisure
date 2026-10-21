@@ -132,6 +132,16 @@ class AppPrefs(context: Context) {
         set(value) = sp.edit().putLong(KEY_ACTIVE_GROUP, value).apply()
 
     /**
+     * 本次锁机是由哪个「任务」触发的；空字符串 = 不是任务触发的（手动锁 / 自带时长）。
+     *
+     * 锁机页会把名字显示出来 —— 用户配了几套任务之后，光看「已锁定」分不清
+     * 现在到底是「专注 25 分钟」还是「深度锁机 2 小时」。解锁时清空。
+     */
+    var activeTaskName: String
+        get() = sp.getString(KEY_ACTIVE_TASK_NAME, "") ?: ""
+        set(value) = sp.edit().putString(KEY_ACTIVE_TASK_NAME, value).apply()
+
+    /**
      * 首页两张卡片上「上次用的那个任务」。
      *
      * 存下来只是为了卡片上显示得出名字（否则只能写"点击选择"），
@@ -203,6 +213,7 @@ class AppPrefs(context: Context) {
         const val KEY_GROUPS = "whitelist_groups"
     const val KEY_TASKS = "tasks"
     const val KEY_ACTIVE_GROUP = "active_whitelist_group"
+    const val KEY_ACTIVE_TASK_NAME = "active_task_name"
     const val KEY_LAST_SIMPLE_TASK = "last_simple_task"
     const val KEY_LAST_POMODORO_TASK = "last_pomodoro_task"
         const val KEY_POMODORO_CONFIG = "pomodoro_config"
