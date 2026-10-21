@@ -28,6 +28,7 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.RadioButton
 import androidx.compose.material3.Switch
+import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
@@ -188,7 +189,7 @@ private fun ScheduleCard(
             Column(Modifier.weight(1f)) {
                 Row(verticalAlignment = Alignment.Bottom) {
                     Text(
-                        text = schedule.startMinutes.toHhMm(),
+                        text = (if (schedule.name.isBlank()) "" else schedule.name + "  ") + schedule.startMinutes.toHhMm(),
                         fontSize = 24.sp,
                         fontWeight = FontWeight.Medium,
                         color = titleColor
@@ -272,6 +273,9 @@ fun ScheduleEditScreen(scheduleId: Long, onDone: () -> Unit) {
     var days by remember { mutableStateOf(existing?.days ?: setOf(1, 2, 3, 4, 5, 6, 7)) }
     var holidayMode by remember { mutableStateOf(existing?.holidayMode ?: HolidayMode.IGNORE) }
 
+    // 规则的名字。可以留空 —— 留空时列表就只显示时刻，和以前一样。
+    var scheduleName by remember { mutableStateOf(existing?.name ?: "") }
+
     // 「执行任务」模式：锁什么由任务决定，本页不再设时长
     val tasks = remember { Repos.tasks.current() }
     var useTask by remember { mutableStateOf(existing?.usesTask ?: false) }
@@ -305,6 +309,20 @@ fun ScheduleEditScreen(scheduleId: Long, onDone: () -> Unit) {
             fontSize = 18.sp,
             fontWeight = FontWeight.Bold
         )
+
+        // 名字放在最上面：先给这条规则起个名，后面看列表才认得出。
+        SectionCard(
+            title = "名称",
+            subtitle = if (scheduleName.isBlank()) "可以留空" else scheduleName
+        ) {
+            OutlinedTextField(
+                value = scheduleName,
+                onValueChange = { scheduleName = it.take(20) },
+                placeholder = { Text("比如：早起、睡前、午休") },
+                modifier = Modifier.fillMaxWidth(),
+                singleLine = true
+            )
+        }
 
         SectionCard(title = "起始时间", subtitle = startMinutes.toHhMm()) {
             // 用和「立即锁机」同一个 DurationPicker：两列数字，精确到 1 分钟。
@@ -631,6 +649,7 @@ fun ScheduleEditScreen(scheduleId: Long, onDone: () -> Unit) {
                 onClick = {
                     val base = existing ?: Schedule(id = Repos.schedules.nextId())
                     val saved = base.copy(
+                        name = scheduleName.trim(),
                         startMinutes = startMinutes,
                         durationMinutes = durationBetween(startMinutes, endMinutes),
                         days = days,

@@ -51,6 +51,7 @@ class ScheduleRepository(private val prefs: AppPrefs) {
             array.put(
                 JSONObject().apply {
                     put("id", s.id)
+            put("name", s.name)
                     put("enabled", s.enabled)
                     put("startMinutes", s.startMinutes)
                     put("durationMinutes", s.durationMinutes)
@@ -73,6 +74,7 @@ class ScheduleRepository(private val prefs: AppPrefs) {
         }
         return Schedule(
             id = json.getLong("id"),
+            name = json.optString("name", ""),
             enabled = json.optBoolean("enabled", true),
             startMinutes = json.optInt("startMinutes", 23 * 60),
             durationMinutes = json.optInt("durationMinutes", 8 * 60),

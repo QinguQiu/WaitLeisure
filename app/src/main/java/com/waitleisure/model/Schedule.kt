@@ -43,6 +43,13 @@ enum class HolidayMode {
  */
 data class Schedule(
     val id: Long,
+    /**
+     * 规则的名字，用户自己填（可为空）。
+     *
+     * 有了它之后列表不再只能靠时间认规则 —— 现在能有好几条，
+     * 「09:12 / 00:00 / 10:10」看下来分不清哪条是「早起」哪条是「睡前」。
+     */
+    val name: String = "",
     val enabled: Boolean = true,
     val startMinutes: Int = 23 * 60,
     val durationMinutes: Int = 8 * 60,
