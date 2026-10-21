@@ -46,6 +46,14 @@ fun DurationPicker(
     maxMinutes: Int,
     modifier: Modifier = Modifier,
     minMinutes: Int = 1,
+    /**
+     * 「小时」列是否首尾相接（滚过 23 接回 0）。
+     *
+     * 只在**选时刻**的场景开（定时页的起始/结束时间）—— 那时小时是钟点，
+     * 23 之后本来就该是 0。选**时长**时（立即锁机、番茄钟）关掉，
+     * 因为「锁 24 小时再接着锁 0 小时」没有意义。
+     */
+    wrapHours: Boolean = false,
     onSelect: (Int) -> Unit
 ) {
     val safeTotal = totalMinutes.coerceIn(minMinutes, maxMinutes)
@@ -62,6 +70,7 @@ fun DurationPicker(
             values = (0..maxHours).toList(),
             selected = hours,
             modifier = Modifier.weight(1f),
+            wrap = wrapHours,
             onSelect = { h -> onSelect((h * 60 + minutes).coerceIn(minMinutes, maxMinutes)) }
         )
         NumberColumn(
@@ -80,11 +89,27 @@ private fun NumberColumn(
     values: List<Int>,
     selected: Int,
     onSelect: (Int) -> Unit,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
+    /**
+     * 可循环：列表首尾相接，滚过最后一个值会接着出现第一个。
+     *
+     * 定时页的「时」列要这个效果 —— 23 点之后接着 0 点，符合"时间是圆的"直觉；
+     * 「立即锁机」那边是时长（锁多久），滚到头就该停住，所以默认 false。
+     */
+    wrap: Boolean = false
 ) {
     // 初始滚动位置对准当前值，免得每次打开都要手动翻
     val startIndex = values.indexOf(selected).let { if (it < 0) 0 else it }
-    val state = rememberLazyListState(initialFirstVisibleItemIndex = startIndex)
+    val span = values.size
+
+    // 循环实现：把列表复制很多份，从中间那份开始。
+    // 不追求真正的无穷 —— 1000 个来回（24×1000 ≈ 24000 行）足够一个人点一辈子了，
+    // 而最近重排索引的动画/闪动代价不值得为它付。
+    val copies = if (wrap) 1000 else 1
+    val itemCount = span * copies
+    val baseIndex = if (wrap) span * (copies / 2) + startIndex else startIndex
+
+    val state = rememberLazyListState(initialFirstVisibleItemIndex = baseIndex)
 
     Column(modifier = modifier, horizontalAlignment = Alignment.CenterHorizontally) {
         Text(label, fontSize = 12.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
@@ -98,7 +123,8 @@ private fun NumberColumn(
                 .border(1.dp, MaterialTheme.colorScheme.outlineVariant, RoundedCornerShape(8.dp)),
             horizontalAlignment = Alignment.CenterHorizontally
         ) {
-            items(values, key = { it }) { value ->
+            items(itemCount, key = { it }) { i ->
+                val value = values[if (wrap) i % span else i]
                 val isSelected = value == selected
                 Box(
                     modifier = Modifier

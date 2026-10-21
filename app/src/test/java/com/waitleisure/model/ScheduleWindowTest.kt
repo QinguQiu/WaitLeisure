@@ -125,6 +125,14 @@ class ScheduleWindowTest {
 
 class ScheduleUserCaseTest {
 
+    private val zone: ZoneId = ZoneId.of("Asia/Shanghai")
+
+    private fun at(year: Int, month: Int, day: Int, hour: Int, minute: Int): Long =
+        LocalDateTime.of(year, month, day, hour, minute).atZone(zone).toInstant().toEpochMilli()
+
+    private fun endAt(year: Int, month: Int, day: Int, hour: Int, minute: Int): Long =
+        at(year, month, day, hour, minute)
+
 private fun monRule() = Schedule(
     id = 2,
     startMinutes = 10 * 60 + 10,
