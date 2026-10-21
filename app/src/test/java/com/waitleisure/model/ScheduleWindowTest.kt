@@ -112,3 +112,44 @@ class ScheduleWindowTest {
         )
     }
 }
+
+// ---------------------------------------------------------------------------
+// 用户实测场景（2026-10-21 反馈）
+//
+// 周一 10:28 建了一条「周一 / 周三、10:10 开始、持续 20 小时 50 分」的规则，
+// 挂的是番茄钟任务，抱怨当天没生效。
+//
+// 先把「窗口判断」这一层钉死：10:10 + 1250 分 = 次日 07:00，
+// 所以 10:28 时窗口必然还在 —— 如果下面的断言失败，说明问题在这一层。
+// ---------------------------------------------------------------------------
+
+class ScheduleUserCaseTest {
+
+private fun monRule() = Schedule(
+    id = 2,
+    startMinutes = 10 * 60 + 10,
+    durationMinutes = 20 * 60 + 50,
+    days = setOf(1, 3)
+)
+
+/** 2026-10-19 是星期一。 */
+@Test
+fun `周一10点28分_周一10点10分开始持续20小时50分的规则_窗口仍在`() {
+    val end = monRule().activeWindowEndMillis(at(2026, 10, 19, 10, 28), zone)
+    assertEquals("应该锁到次日 07:00", endAt(2026, 10, 20, 7, 0), end)
+}
+
+/** 周二 10:00 不在窗口内（周一那条窗口已经在周二 07:00 结束）。 */
+@Test
+fun `周二10点不在周一那条规则的窗口内`() {
+    val end = monRule().activeWindowEndMillis(at(2026, 10, 20, 10, 0), zone)
+    assertNull("周二 10:00 已经超出周一那条窗口", end)
+}
+
+/** 周日 23:00 建的规则不匹配周一时，不该误判成进行中。 */
+@Test
+fun `不匹配的日子不算窗口内`() {
+    val tuesdayOnly = Schedule(id = 3, startMinutes = 10 * 60 + 10, durationMinutes = 60, days = setOf(2))
+    assertNull(tuesdayOnly.activeWindowEndMillis(at(2026, 10, 19, 10, 28), zone))
+}
+}
