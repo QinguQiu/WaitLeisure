@@ -114,7 +114,15 @@ fun ScheduleListScreen(onEdit: (Long) -> Unit) {
                             }
                         },
                         onClick = { onEdit(schedule.id) },
-                        onDelete = { pendingDelete = schedule }
+                        onCopy = {
+                // 复制一条规则：同样的时间/重复/任务/白名单，新 id。
+                // 不自动启用 —— 原规则和新副本同时生效会重复上锁，
+                // 让用户改完时间再保存（保存即启用）更安全。
+                Repos.schedules.upsert(
+                    schedule.copy(id = Repos.schedules.nextId(), enabled = false)
+                )
+            }
+            , onDelete = { pendingDelete = schedule }
                     )
                 }
                 item { Spacer(Modifier.height(24.dp)) }
@@ -146,6 +154,7 @@ private fun ScheduleCard(
     schedule: Schedule,
     onToggle: (Boolean) -> Unit,
     onClick: () -> Unit,
+    onCopy: () -> Unit,
     onDelete: () -> Unit
 ) {
     // 停用的规则整体变灰。
@@ -215,6 +224,9 @@ private fun ScheduleCard(
                 )
             }
             Switch(checked = schedule.enabled, onCheckedChange = onToggle)
+            TextButton(onClick = onCopy) {
+                Text("复制")
+            }
             TextButton(onClick = onDelete) {
                 Text("\u5220\u9664")
             }
@@ -231,7 +243,9 @@ fun ScheduleEditScreen(scheduleId: Long, onDone: () -> Unit) {
     val existing = remember(scheduleId) { Repos.schedules.byId(scheduleId) }
     val isNew = existing == null
 
-    var startMinutes by remember { mutableIntStateOf(existing?.startMinutes ?: 0) }
+    var startMinutes by remember {
+        mutableIntStateOf(existing?.startMinutes ?: nowMinutes())
+    }
 
     // 「结束时间」而不是「设时长」。
     //
@@ -672,3 +686,9 @@ private fun persistSchedule(context: Context, schedule: Schedule) {
 
 
 private const val DEFAULT_DURATION_MINUTES = 8 * 60
+
+/** 当前时刻的「分钟数」（0..1439）。新建定时规则时用它做起始时间。 */
+private fun nowMinutes(): Int {
+    val t = java.time.LocalTime.now()
+    return t.hour * 60 + t.minute
+}
