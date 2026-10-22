@@ -187,9 +187,23 @@ private fun ScheduleCard(
             verticalAlignment = Alignment.CenterVertically
         ) {
             Column(Modifier.weight(1f)) {
+                // 名字单独占一行。
+                //
+                // ⚠️ 曾经图省事，把名字用字符串拼进下面那个 24sp 的 Text 里 ——
+                // 结果名字继承了时刻的粗体大字，把整行宽度吃光，
+                // 右边「任务 · 番茄钟」被挤成一字一行（用户截图反馈）。
+                if (schedule.name.isNotBlank()) {
+                    Text(
+                        text = schedule.name,
+                        fontSize = 13.sp,
+                        fontWeight = FontWeight.SemiBold,
+                        color = titleColor
+                    )
+                    Spacer(Modifier.height(2.dp))
+                }
                 Row(verticalAlignment = Alignment.Bottom) {
                     Text(
-                        text = (if (schedule.name.isBlank()) "" else schedule.name + "  ") + schedule.startMinutes.toHhMm(),
+                        text = schedule.startMinutes.toHhMm(),
                         fontSize = 24.sp,
                         fontWeight = FontWeight.Medium,
                         color = titleColor
