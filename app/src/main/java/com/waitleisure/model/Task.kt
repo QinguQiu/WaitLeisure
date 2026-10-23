@@ -42,7 +42,7 @@ data class Task(
             val p = pomodoroConfig.split(',').mapNotNull { it.trim().toIntOrNull() }
             val rounds = p.getOrNull(0)?.takeIf { it > 0 } ?: 4
             val focus = p.getOrNull(1)?.takeIf { it > 0 } ?: 25
-            "番茄钟 · $rounds 个循环 × $focus 分"
+            "番茄钟 · $rounds 个番茄 × $focus 分"
         }
     }
 }

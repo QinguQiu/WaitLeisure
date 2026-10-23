@@ -113,6 +113,14 @@ object LockController {
     }
 
     private fun stopService(context: Context) {
+        // ⚠️ 番茄钟在跑时**绝不能停**这个服务。
+        //
+        // 番茄钟的相位推进全靠 LockForegroundService 每秒调一次 Pomodoro.tick()。
+        // 而休息期间 locked_until 是空的（tick 里主动 unlock 了），于是：
+        //   · 聚焦结束 → 锁定到期 → unlock()/sync() 走 stopService → 服务没了
+        //   · 没人 tick → 休息永远结束不了 → 后面的番茄一个都不会再锁
+        // 用户反馈的「进入休息后无法继续锁机完成任务」就是这个。
+        if (Pomodoro.isActive()) return
         runCatching { context.stopService(Intent(context, LockForegroundService::class.java)) }
     }
 }

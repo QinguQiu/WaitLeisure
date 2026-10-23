@@ -442,14 +442,14 @@ fun PomodoroConfigDialog(onDismiss: () -> Unit, onSave: (String) -> Unit) {
                         value = perSet,
                         onValueChange = { perSet = it.filter(Char::isDigit).take(2) },
                         singleLine = true,
-                        label = { Text("几个循环后长休息") },
+                        label = { Text("几个番茄后长休息") },
                         modifier = Modifier.weight(1f)
                     )
                     OutlinedTextField(
                         value = rounds,
                         onValueChange = { rounds = it.filter(Char::isDigit).take(2) },
                         singleLine = true,
-                        label = { Text("循环次数") },
+                        label = { Text("番茄钟个数") },
                         modifier = Modifier.weight(1f)
                     )
                 }
