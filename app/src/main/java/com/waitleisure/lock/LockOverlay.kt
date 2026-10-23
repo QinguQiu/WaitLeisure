@@ -94,8 +94,18 @@ object LockOverlay {
                     MaterialTheme(colorScheme = darkColorScheme()) {
                         LockScreenRoute(
                             onExit = {
-                                // PIN 解锁或锁定到期，撤掉悬浮窗
-                                LockController.unlock(context)
+                                // 这里**只负责收掉悬浮窗**。
+                                //
+                                // 以前这里还调了 LockController.unlock(context)，而
+                                // unlock() 默认会把 App 首页拉到前台 ——
+                                // LockScreenRoute 内部有「锁定到期自动退场」，
+                                // 它每秒触发一次，于是变成：
+                                //   拉首页 → 桌面在前台 → 看门狗盖遮罩 → 再拉首页 …
+                                // 番茄钟休息期间根本没法用别的应用（用户实测）。
+                                //
+                                // 解锁本身由 LockScreenRoute 按场景调用：
+                                //   · 到期 → unlock(pullAppToFront = false)
+                                //   · 手动 → unlock()（这条才该弹首页）
                                 hide()
                             }
                         )
