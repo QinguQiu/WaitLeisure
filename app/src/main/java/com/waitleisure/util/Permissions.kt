@@ -60,6 +60,69 @@ object Permissions {
     fun isAccessibilityListedButDead(context: Context): Boolean =
         isAccessibilityListed(context) && !isAccessibilityEnabled(context)
 
+    /**
+     * 能不能自己把无障碍重新绑上。
+     *
+     * `WRITE_SECURE_SETTINGS` 是 signature|privileged|**development** 级权限 ——
+     * 普通 App 拿不到，但可以用 adb 一次性授予：
+     *
+     *     adb shell pm grant com.waitleisure android.permission.WRITE_SECURE_SETTINGS
+     *
+     * 授予之后就允许我们直接改系统设置里的无障碍列表，不用再让用户跑一趟设置页。
+     */
+    fun canRebindAccessibility(context: Context): Boolean = runCatching {
+        context.checkSelfPermission(android.Manifest.permission.WRITE_SECURE_SETTINGS) ==
+            android.content.pm.PackageManager.PERMISSION_GRANTED
+    }.getOrDefault(false)
+
+    /**
+     * 把无障碍服务重新写回系统设置并启用；返回是否「尝试过且当前已生效」。
+     *
+     * 什么时候用：MIUI/HyperOS 上从最近任务划掉 App 会连进程带服务一起杀，
+     * 无障碍绑定跟着消失，用户每次都要手动去设置里重开。
+     * 有了 WRITE_SECURE_SETTINGS 就能在下次打开 App 时自动补上。
+     *
+     * **只在真的掉了的时候写** —— 否则会把用户自己配的其它无障碍服务覆盖掉。
+     */
+    fun rebindAccessibilityIfNeeded(context: Context): Boolean {
+        if (isAccessibilityEnabled(context)) return true
+        if (!canRebindAccessibility(context)) return false
+
+        return runCatching {
+            val self = ComponentName(context, LockAccessibilityService::class.java)
+            val full = self.flattenToString()
+            val short = self.flattenToShortString()
+
+            // 读出现有列表，只**追加**自己，绝不覆盖别人 ——
+            // 用户可能还开着别的无障碍服务（比如按键映射），一并冲掉就闯祸了。
+            val raw = Settings.Secure.getString(
+                context.contentResolver,
+                Settings.Secure.ENABLED_ACCESSIBILITY_SERVICES
+            ) ?: ""
+            val existing = raw.split(':').filter { it.isNotBlank() }
+            val alreadyThere = existing.any { it.equals(full, true) || it.equals(short, true) }
+
+            if (!alreadyThere) {
+                val merged = (existing + full).joinToString(":")
+                Settings.Secure.putString(
+                    context.contentResolver,
+                    Settings.Secure.ENABLED_ACCESSIBILITY_SERVICES,
+                    merged
+                )
+            }
+            Settings.Secure.putInt(
+                context.contentResolver,
+                Settings.Secure.ACCESSIBILITY_ENABLED,
+                1
+            )
+
+            // 绑定是异步的，这里立刻查多半还没生效；只记录「写过了」。
+            true
+        }.onFailure {
+            DiagLog.add("权限", "自动重绑无障碍失败：" + it.javaClass.simpleName + " " + it.message)
+        }.getOrDefault(false)
+    }
+
     private fun isAccessibilityListed(context: Context): Boolean {
         val component = ComponentName(context, LockAccessibilityService::class.java)
         val full = component.flattenToString()

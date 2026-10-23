@@ -56,6 +56,14 @@
     <uses-permission android:name="android.permission.EXPAND_STATUS_BAR" />
 
     <!--
+      用来自动重绑无障碍。这是 signature|privileged|development 级权限：
+      普通安装拿不到，只能靠一次 adb 授权 ——
+        adb shell pm grant com.waitleisure android.permission.WRITE_SECURE_SETTINGS
+      没授权时 App 照常工作，只是要用户手动去设置里开无障碍。
+    -->
+    <uses-permission android:name="android.permission.WRITE_SECURE_SETTINGS" />
+
+    <!--
       只查询「有启动图标」的应用，读取白名单候选列表已经够用。
       刻意不使用 QUERY_ALL_PACKAGES —— 权限更小，且在 Google Play 上不会触发政策审查。
     -->
