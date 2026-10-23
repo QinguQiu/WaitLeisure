@@ -205,6 +205,11 @@ fun HomeScreen(onOpenPermissions: () -> Unit) {
         // 两张独立的动作卡片。选中的任务存进 prefs，切页面回来还记得。
         // 番茄钟进行中时，第二张卡变成「停止番茄钟」。
         if (pomodoroActive) {
+            // 休息阶段不给「点此停止」——休息本来就是放松时间，
+            // 但「停止」意味着这次番茄彻底作废，只该在专注阶段由用户主动放弃。
+            // 休息时点卡片还会开选择框，等于变相允许改设置，一起堵掉。
+            val pomoNow = Pomodoro.current()
+            val isBreak = pomoNow?.second == "break"
             Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
                 ActionCard(
                     title = "简单锁机", glyph = "⏳",
@@ -213,11 +218,18 @@ fun HomeScreen(onOpenPermissions: () -> Unit) {
                     onClick = { showSimplePicker = true }
                 )
                 ActionCard(
-                    title = "番茄钟进行中", glyph = "🍅",
+                    title = if (isBreak) "休息中" else "番茄钟进行中",
+                    glyph = "🍅",
                     taskName = Pomodoro.describe(Pomodoro.activeConfig()),
-                    taskDetail = "点此停止",
+                    taskDetail = if (isBreak) "休息阶段不能停止" else "点此停止",
                     modifier = Modifier.weight(1f),
-                    onClick = { Pomodoro.stop(context); refreshKey++ }
+                    onClick = {
+                        // 休息阶段完全不响应点击
+                        if (!isBreak) {
+                            Pomodoro.stop(context)
+                            refreshKey++
+                        }
+                    }
                 )
             }
         } else {

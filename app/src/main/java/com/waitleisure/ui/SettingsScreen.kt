@@ -51,6 +51,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.text.input.VisualTransformation
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.waitleisure.data.AppPrefs
@@ -78,6 +79,29 @@ fun SettingsScreen(onOpenTasks: () -> Unit = {}) {
     var allowPinUnlock by remember { mutableStateOf(Repos.prefs.allowPinUnlock) }
     var showQuickEdit by remember { mutableStateOf(false) }
     var pinSet by remember { mutableStateOf(!Repos.prefs.pinHash.isNullOrEmpty()) }
+
+    // 番茄钟**休息期间不许改设置**。
+    //
+    // 聚焦阶段整机是锁着的，根本进不来；只有休息阶段是解锁的，用户能摸到这里。
+    // 这时候若能改设置（尤其是关掉番茄钟、改轮转参数），这一轮番茄就白跑了 ——
+    // 所以在入口整页挡掉。
+    //
+    // 任务编辑页、定时编辑页都是从设置进去的，挡住这里等于一起挡住。
+    if (Pomodoro.current()?.second == "break") {
+        Box(
+            modifier = Modifier.fillMaxSize().padding(32.dp),
+            contentAlignment = Alignment.Center
+        ) {
+            Text(
+                text = "番茄钟休息中\n\n休息结束前不能修改设置",
+                fontSize = 15.sp,
+                lineHeight = 24.sp,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                textAlign = TextAlign.Center
+            )
+        }
+        return
+    }
 
     // 个性签名：和 prefs 双向同步（每敲一个字就存，不必额外点保存）
     var signature by remember { mutableStateOf(Repos.prefs.signature) }
