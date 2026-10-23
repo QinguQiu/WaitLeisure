@@ -273,10 +273,14 @@ internal fun LockScreenRoute(onExit: () -> Unit) {
         Repos.effectiveWhitelist().sorted()
     }
 
-    // 锁定到期后自动退场
+    // 锁定到期后自动退场。
+    //
+    // 这里**只退场，不拉首页**：番茄钟的休息阶段就是这么进来的，
+    // 拉首页会把正在用别的应用的人踹出来（休息时间应该允许玩别的软件）。
     LaunchedEffect(now) {
         if (!Repos.lockState.isLockedNow()) {
             Repos.lockState.refresh()
+            LockController.unlock(context, pullAppToFront = false)
             onExit()
         }
     }

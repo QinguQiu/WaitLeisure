@@ -57,7 +57,7 @@ object LockController {
         LockScreenActivity.show(context)
     }
 
-    fun unlock(context: Context) {
+    fun unlock(context: Context, pullAppToFront: Boolean = true) {
         Repos.ensure(context)
         Repos.lockState.unlock()
         // 解锁就回到「只用全局白名单」。下次锁机时再由调用方重新指定分组。
