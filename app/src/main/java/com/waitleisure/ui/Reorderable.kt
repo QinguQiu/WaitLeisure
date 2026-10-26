@@ -122,10 +122,15 @@ class DragDropState(
                 centerY in other.offset.toFloat()..(other.offset + other.size).toFloat()
         }
         if (target != null) {
-            // 换位就完事了 —— 位移下一帧会按 pointerY 重新算，天然跟手，
-            // 不需要再补偿什么（补偿正是快速拖动时跑偏的原因）。
-            onMove(current, toDataIndex(target.index))
-            draggingIndex = toDataIndex(target.index)
+            // 换位后立刻按**目标槽位**重算一次偏移。
+            //
+            // 不重算的话：条目已经挪到 target 的位置，但 draggingOffset 还是按
+            // 旧槽位(item.offset)算的，要到下一次手指移动才会更新 ——
+            // 中间那一两帧视觉位置会跳一下（用户反馈的「弹跳」）。
+            val targetData = toDataIndex(target.index)
+            onMove(current, targetData)
+            draggingIndex = targetData
+            draggingOffset = targetTop - target.offset
             return
         }
 
