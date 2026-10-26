@@ -619,7 +619,7 @@ private fun TimePage(now: Long) {
                 SimpleDateFormat("HH:mm", Locale.getDefault()).format(Date(now))
             },
             color = Color.White,
-            fontSize = 72.sp,
+            fontSize = 86.4.sp,
             fontWeight = FontWeight.Light
         )
 
@@ -628,19 +628,19 @@ private fun TimePage(now: Long) {
                 SimpleDateFormat("M月d日 EEEE", Locale.CHINA).format(Date(now))
             },
             color = Color(0xFFB0B0B0),
-            fontSize = 14.sp
+            fontSize = 16.8.sp
         )
 
         Spacer(Modifier.height(26.dp))
 
-        HaloText(text = "\uD83D\uDD12", fontSize = 24.sp)
+        HaloText(text = "\uD83D\uDD12", fontSize = 28.8.sp)
 
         Spacer(Modifier.height(8.dp))
 
         HaloText(
             text = stringResource(R.string.lock_title),
             color = Color.White,
-            fontSize = 19.sp,
+            fontSize = 22.8.sp,
             fontWeight = FontWeight.SemiBold
         )
 
@@ -655,7 +655,7 @@ private fun TimePage(now: Long) {
             HaloText(
                 text = "任务 · $activeTask",
                 color = Color(0xFFFFB74D),
-                fontSize = 12.sp
+                fontSize = 14.4.sp
             )
             Spacer(Modifier.height(4.dp))
         }
@@ -663,7 +663,7 @@ private fun TimePage(now: Long) {
         HaloText(
             text = remainingText(now),
             color = Color(0xFFB0B0B0),
-            fontSize = 13.sp
+            fontSize = 15.6.sp
         )
 
         // 个性签名：设置页里写的一句话。
@@ -674,10 +674,10 @@ private fun TimePage(now: Long) {
             HaloText(
                 text = signature,
                 color = Color(0xFFE6E6E6),
-                fontSize = 15.sp,
+                fontSize = 18.sp,
                 fontStyle = FontStyle.Italic,
                 textAlign = TextAlign.Center,
-                lineHeight = 22.sp,
+                lineHeight = 26.4.sp,
                 modifier = Modifier.padding(horizontal = 8.dp)
             )
         }
@@ -690,7 +690,7 @@ private fun TimePage(now: Long) {
                 text = "\uD83C\uDF45 " + pomo.first + " 组 · " +
                     if (pomo.second == "focus") "专注中" else "休息中",
                 color = Color(0xFFFFB74D),
-                fontSize = 13.sp
+                fontSize = 15.6.sp
             )
         }
     }
