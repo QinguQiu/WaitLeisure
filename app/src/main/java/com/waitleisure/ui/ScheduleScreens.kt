@@ -15,6 +15,8 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.itemsIndexed
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
@@ -102,9 +104,19 @@ fun ScheduleListScreen(onEdit: (Long) -> Unit) {
         if (schedules.isEmpty()) {
             EmptyHint("还没有定时规则，点右上角「新建」加一条。")
         } else {
-            LazyColumn(verticalArrangement = Arrangement.spacedBy(10.dp)) {
-                items(schedules, key = { it.id }) { schedule ->
+            // 长按条目拖动排序。顺序持久化在 JSON 数组里，dragState 换位后直接存回。
+            val listState = rememberLazyListState()
+            val dragState = rememberDragDropState(listState) { from, to ->
+                Repos.schedules.move(from, to)
+            }
+            LazyColumn(
+                state = listState,
+                verticalArrangement = Arrangement.spacedBy(10.dp),
+                modifier = Modifier.dragContainer(dragState)
+            ) {
+                itemsIndexed(schedules, key = { _, s -> s.id }) { index, schedule ->
                     ScheduleCard(
+                        modifier = Modifier.draggableItem(dragState, index),
                         schedule = schedule,
                         onToggle = { enabled ->
                             val updated = schedule.copy(enabled = enabled)
@@ -157,7 +169,8 @@ private fun ScheduleCard(
     onToggle: (Boolean) -> Unit,
     onClick: () -> Unit,
     onCopy: () -> Unit,
-    onDelete: () -> Unit
+    onDelete: () -> Unit,
+    modifier: Modifier = Modifier
 ) {
     // 停用的规则整体变灰。
     // 单次规则触发一次后会被自动置为停用，走到这个状态 ——
@@ -170,7 +183,8 @@ private fun ScheduleCard(
     }
 
     Card(
-        modifier = Modifier
+        // modifier 由调用方传入 —— 拖动排序时它带着 graphicsLayer 平移
+        modifier = modifier
             .fillMaxWidth()
             .clickable(onClick = onClick),
         colors = CardDefaults.cardColors(

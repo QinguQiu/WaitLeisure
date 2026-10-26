@@ -35,6 +35,19 @@ class ScheduleRepository(private val prefs: AppPrefs) {
 
     fun delete(id: Long) = persist(_schedules.value.filterNot { it.id == id })
 
+    /**
+     * 拖动排序：把第 [from] 条移动到 [to] 位置。
+     *
+     * 顺序就是 JSON 数组的顺序 —— 所以只改列表再存回去，**不用加新字段**，
+     * 老数据读出来天然还是原来的顺序。
+     */
+    fun move(from: Int, to: Int) {
+        val list = _schedules.value.toMutableList()
+        if (from !in list.indices || to !in list.indices || from == to) return
+        list.add(to, list.removeAt(from))
+        persist(list)
+    }
+
     private fun persist(list: List<Schedule>) {
         prefs.schedulesJson = toJson(list)
         _schedules.value = list

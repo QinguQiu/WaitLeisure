@@ -22,7 +22,7 @@
 - 排序持久化：分组数据本来就是 JSON 数组，**数组顺序 = 显示顺序**，
   拖动后调整数组顺序再存回即可，**不需要加新字段**
 
-## 2. 定时页：同上
+## 2. 定时页：同上 ✅ 已完成（2.3.0）
 
 - 文件：`ui/ScheduleScreens.kt`
 - 列表：`ScheduleListScreen` → `LazyColumn` → `items(schedules, key = { it.id })` → `ScheduleCard`
