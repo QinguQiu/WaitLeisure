@@ -91,7 +91,7 @@ import androidx.core.content.ContextCompat
 import androidx.core.graphics.drawable.toBitmap
 import com.waitleisure.R
 import com.waitleisure.data.Repos
-import com.waitleisure.ui.OutlinedText
+import com.waitleisure.ui.HaloText
 import com.waitleisure.ui.FramedWallpaper
 import com.waitleisure.ui.AppIcon
 import com.waitleisure.ui.rememberAppLabel
@@ -614,7 +614,7 @@ private fun TimePage(now: Long) {
         horizontalAlignment = Alignment.CenterHorizontally,
         verticalArrangement = Arrangement.Center
     ) {
-        Text(
+        HaloText(
             text = remember(now) {
                 SimpleDateFormat("HH:mm", Locale.getDefault()).format(Date(now))
             },
@@ -623,7 +623,7 @@ private fun TimePage(now: Long) {
             fontWeight = FontWeight.Light
         )
 
-        Text(
+        HaloText(
             text = remember(now) {
                 SimpleDateFormat("M月d日 EEEE", Locale.CHINA).format(Date(now))
             },
@@ -633,11 +633,11 @@ private fun TimePage(now: Long) {
 
         Spacer(Modifier.height(26.dp))
 
-        Text(text = "\uD83D\uDD12", fontSize = 24.sp)
+        HaloText(text = "\uD83D\uDD12", fontSize = 24.sp)
 
         Spacer(Modifier.height(8.dp))
 
-        Text(
+        HaloText(
             text = stringResource(R.string.lock_title),
             color = Color.White,
             fontSize = 19.sp,
@@ -652,7 +652,7 @@ private fun TimePage(now: Long) {
         // 非任务触发的（手动锁 / 自带时长）就没有这一行。
         val activeTask = Repos.prefs.activeTaskName
         if (activeTask.isNotBlank()) {
-            Text(
+            HaloText(
                 text = "任务 · $activeTask",
                 color = Color(0xFFFFB74D),
                 fontSize = 12.sp
@@ -660,7 +660,7 @@ private fun TimePage(now: Long) {
             Spacer(Modifier.height(4.dp))
         }
 
-        Text(
+        HaloText(
             text = remainingText(now),
             color = Color(0xFFB0B0B0),
             fontSize = 13.sp
@@ -671,7 +671,7 @@ private fun TimePage(now: Long) {
         val signature = Repos.prefs.signature
         if (signature.isNotBlank()) {
             Spacer(Modifier.height(20.dp))
-            Text(
+            HaloText(
                 text = signature,
                 color = Color(0xFFE6E6E6),
                 fontSize = 15.sp,
@@ -686,7 +686,7 @@ private fun TimePage(now: Long) {
         val pomo = Pomodoro.current()
         if (pomo != null) {
             Spacer(Modifier.height(14.dp))
-            Text(
+            HaloText(
                 text = "\uD83C\uDF45 " + pomo.first + " 组 · " +
                     if (pomo.second == "focus") "专注中" else "休息中",
                 color = Color(0xFFFFB74D),
