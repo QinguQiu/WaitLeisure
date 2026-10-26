@@ -88,7 +88,6 @@ data class Schedule(
         /** 严格模式：强制关闭（允许密码解锁）。 */
         const val STRICT_OFF = 1
     }
-    }
 }
 
 /** 把「0 点起的分钟数」格式化为 HH:mm。 */
