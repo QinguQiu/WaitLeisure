@@ -133,6 +133,7 @@ object Pomodoro {
         Repos.prefs.pomodoroState = ""
         Repos.prefs.pomodoroRunConfig = ""
         DiagLog.add("番茄", "已手动停止")
+        BreakOverlay.reset(context)
         LockController.unlock(context)
     }
 
@@ -153,6 +154,7 @@ object Pomodoro {
                 Repos.prefs.pomodoroState = ""
                 Repos.prefs.pomodoroRunConfig = ""
                 DiagLog.add("番茄", "全部 $round 个番茄完成，收工")
+                BreakOverlay.reset(context)
                 LockController.unlock(context)
                 return true
             }
@@ -163,11 +165,15 @@ object Pomodoro {
             // 服务靠 isActive() 续命，休息结束才有力气把下一个循环锁起来。
             Repos.lockState.unlock()
             DiagLog.add("番茄", "第 $round 个番茄结束，${if (isLong) "长" else "短"}休息 $mins 分")
+            // 休息是解锁的，用户会切到别的应用 —— 右上角挂个小胶囊显示还剩多久
+            BreakOverlay.resetDismissed()
+            BreakOverlay.show(context, now + mins * 60_000L)
         } else {
             val nextRound = round + 1
             val nextEnd = now + c.focusMinutes * 60_000L
             Repos.prefs.pomodoroState = "$nextRound,focus,$nextEnd"
             DiagLog.add("番茄", "休息结束，第 $nextRound/${c.rounds} 个番茄开始")
+            BreakOverlay.hide()
             // 休息期间只调了 lockState.unlock()（不是 LockController.unlock），
             // 所以 activeWhitelistGroupId 还留着本次的分组 —— 原样传回去即可。
             LockController.lock(

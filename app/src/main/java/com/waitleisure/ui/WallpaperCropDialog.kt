@@ -5,9 +5,11 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.navigationBarsPadding
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.material3.Button
@@ -17,14 +19,17 @@ import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableFloatStateOf
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.ImageBitmap
+import androidx.compose.ui.text.font.FontStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
+import com.waitleisure.data.Repos
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.Dialog
@@ -62,6 +67,9 @@ fun WallpaperCropDialog(
     var offsetX by remember { mutableFloatStateOf(initialOffsetX) }
     var offsetY by remember { mutableFloatStateOf(initialOffsetY) }
 
+    // 锁机文字预览开着没。默认开 —— 用户进来就是为了看"锁机时长什么样"。
+    var showPreview by remember { mutableStateOf(true) }
+
     Dialog(
         onDismissRequest = onCancel,
         // 默认 Dialog 会留边距，这里要的是整屏 —— 否则预览比例和锁机页对不上
@@ -86,6 +94,67 @@ fun WallpaperCropDialog(
                 }
             )
 
+            // ---- 锁机页预览 ----
+            //
+            // 壁纸本身已经由 FramedWallpaper 画得和锁机页一模一样了，
+            // 这里只补**压在上面那层文字** —— 不然调取景时不知道时间和签名
+            // 会落在画面的哪个位置，容易把脸/标题刚好压在文字底下。
+            //
+            // 用半透明，既能看到文字占位，也不挡着看壁纸细节。
+            if (showPreview) {
+                val now = java.time.LocalDateTime.now()
+                val timeText = String.format("%02d:%02d", now.hour, now.minute)
+                val dateText = "${now.monthValue}月${now.dayOfMonth}日 " +
+                    "星期" + "一二三四五六日"[now.dayOfWeek.value - 1]
+                val signature = Repos.prefs.signature
+
+                Column(
+                    modifier = Modifier
+                        .align(Alignment.Center)
+                        .fillMaxWidth()
+                        .padding(horizontal = 32.dp),
+                    horizontalAlignment = Alignment.CenterHorizontally
+                ) {
+                    Text(
+                        text = timeText,
+                        color = Color.White.copy(alpha = 0.85f),
+                        fontSize = 52.sp,
+                        fontWeight = FontWeight.Light
+                    )
+                    Text(
+                        text = dateText,
+                        color = Color.White.copy(alpha = 0.6f),
+                        fontSize = 14.sp
+                    )
+                    Spacer(Modifier.height(26.dp))
+                    Text(text = "🔒", fontSize = 22.sp)
+                    Spacer(Modifier.height(6.dp))
+                    Text(
+                        text = "已锁定",
+                        color = Color.White.copy(alpha = 0.85f),
+                        fontSize = 18.sp,
+                        fontWeight = FontWeight.SemiBold
+                    )
+                    Spacer(Modifier.height(6.dp))
+                    Text(
+                        text = "剩余 12 分 34 秒",
+                        color = Color.White.copy(alpha = 0.45f),
+                        fontSize = 12.sp
+                    )
+                    if (signature.isNotBlank()) {
+                        Spacer(Modifier.height(14.dp))
+                        Text(
+                            text = signature,
+                            color = Color.White.copy(alpha = 0.55f),
+                            fontSize = 12.sp,
+                            fontStyle = FontStyle.Italic,
+                            lineHeight = 18.sp,
+                            textAlign = TextAlign.Center
+                        )
+                    }
+                }
+            }
+
             // 提示条
             Column(
                 modifier = Modifier
@@ -107,6 +176,15 @@ fun WallpaperCropDialog(
                     fontSize = 12.sp,
                     textAlign = TextAlign.Center
                 )
+                Spacer(Modifier.height(8.dp))
+                // 预览开关：想看清纯壁纸时切掉文字层
+                TextButton(onClick = { showPreview = !showPreview }) {
+                    Text(
+                        text = if (showPreview) "隐藏锁机文字" else "显示锁机文字",
+                        color = Color.White.copy(alpha = 0.8f),
+                        fontSize = 12.sp
+                    )
+                }
             }
 
             // 底部操作条
