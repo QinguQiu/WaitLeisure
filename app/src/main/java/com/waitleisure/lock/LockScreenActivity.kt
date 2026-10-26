@@ -901,14 +901,22 @@ private fun AppEntry(packageName: String, onClick: () -> Unit) {
             backgroundColor = Color(0xFF1B1B1B)
         )
         Spacer(Modifier.height(6.dp))
+        // 名字垫一层半透明黑底。
+        //
+        // 浅灰字压在亮壁纸上几乎看不清（真机截图里「千问」「文件」就是这种）——
+        // 全局加渐变会牺牲壁纸，所以在文字自己下面垫一小块圆角底，
+        // 只遮住名字那一条，壁纸其余部分完全不动。
         Text(
             text = label,
-            color = Color(0xFFBDBDBD),
+            color = Color(0xFFD6D6D6),
             fontSize = 11.sp,
             maxLines = 1,
             overflow = TextOverflow.Ellipsis,
             textAlign = TextAlign.Center,
-            modifier = Modifier.fillMaxWidth()
+            modifier = Modifier
+                .clip(RoundedCornerShape(6.dp))
+                .background(Color(0x8C000000))
+                .padding(horizontal = 6.dp, vertical = 2.dp)
         )
     }
 }
