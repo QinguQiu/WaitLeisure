@@ -1,6 +1,8 @@
 package com.waitleisure.ui
 
 import android.content.Context
+import android.os.Build
+import android.content.Intent
 import android.graphics.BitmapFactory
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.PickVisualMediaRequest
@@ -117,14 +119,21 @@ fun SettingsScreen(onOpenTasks: () -> Unit = {}) {
     // 为什么要临时文件：以前是选完直接覆盖 wallpaper.jpg，于是用户在取景页
     // 点「取消」也回天乏术 —— 旧壁纸已经被冲掉了。现在取消 = 什么都没发生。
     //
-    // 为什么用 PickVisualMedia 而不是 GetContent：
-    // GetContent 拉起的是**系统文件浏览器**（documentsui），左边只有「最近/下载/图片」
-    // 这类目录，没有「相册」分类 —— 用户找自己相册里的照片很别扭。
-    // PickVisualMedia 走的是 Android 13+ 的系统 Photo Picker（旧系统自动回落），
-    // 界面就是相册那种网格，带「照片 / 相册」分类。
+    // 为什么改用 ACTION_PICK：
+    // PickVisualMedia（系统 Photo Picker）只列它能访问到的那部分相册 ——
+    // 用户反馈「有相册分类，但看不见全部相册」。改成拉起相册本身的图片选择，
+    // 配合 READ_MEDIA_IMAGES 权限，就能看到完整相册列表。
+    val mediaImagesPermission = if (Build.VERSION.SDK_INT >= 33) {
+        "android.permission.READ_MEDIA_IMAGES"
+    } else {
+        "android.permission.READ_EXTERNAL_STORAGE"
+    }
+
+    // 拉起相册（任何能处理 ACTION_PICK 的应用；MIUI 上是自家相册）
     val wallpaperPicker = rememberLauncherForActivityResult(
-        ActivityResultContracts.PickVisualMedia()
-    ) { uri ->
+        ActivityResultContracts.StartActivityForResult()
+    ) { result ->
+        val uri = result.data?.data
         if (uri != null) {
             val decoded = runCatching {
                 val tmp = File(context.filesDir, PENDING_WALLPAPER)
@@ -138,6 +147,24 @@ fun SettingsScreen(onOpenTasks: () -> Unit = {}) {
                 pendingIsNewImage = true
             }
         }
+    }
+
+    fun launchGallery() {
+        runCatching {
+            wallpaperPicker.launch(
+                Intent(
+                    Intent.ACTION_PICK,
+                    android.provider.MediaStore.Images.Media.EXTERNAL_CONTENT_URI
+                )
+            )
+        }
+    }
+
+    // 权限拿到之后再拉相册
+    val mediaPermLauncher = rememberLauncherForActivityResult(
+        ActivityResultContracts.RequestPermission()
+    ) { granted ->
+        if (granted) launchGallery()
     }
 
     Column(
@@ -243,9 +270,15 @@ fun SettingsScreen(onOpenTasks: () -> Unit = {}) {
             Spacer(Modifier.height(10.dp))
             Row {
                 TextButton(onClick = {
-                        wallpaperPicker.launch(
-                            PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly)
-                        )
+                        runCatching {
+                            if (context.checkSelfPermission(mediaImagesPermission) ==
+                                android.content.pm.PackageManager.PERMISSION_GRANTED
+                            ) {
+                                launchGallery()
+                            } else {
+                                mediaPermLauncher.launch(mediaImagesPermission)
+                            }
+                        }
                     }) {
                     Text(if (Repos.prefs.wallpaperImagePath == null) "选择图片…" else "换一张图片…")
                 }

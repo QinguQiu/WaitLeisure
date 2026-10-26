@@ -56,6 +56,16 @@
     <uses-permission android:name="android.permission.EXPAND_STATUS_BAR" />
 
     <!--
+      选壁纸时要能看到完整的相册列表。
+      系统 Photo Picker 只列它能看的那部分，所以这里读媒体库，
+      让它（以及 ACTION_PICK 拉起的相册）能拿到全部图片。
+    -->
+    <uses-permission android:name="android.permission.READ_MEDIA_IMAGES" />
+    <uses-permission
+        android:name="android.permission.READ_EXTERNAL_STORAGE"
+        android:maxSdkVersion="32" />
+
+    <!--
       用来自动重绑无障碍。这是 signature|privileged|development 级权限：
       普通安装拿不到，只能靠一次 adb 授权 ——
         adb shell pm grant com.waitleisure android.permission.WRITE_SECURE_SETTINGS
