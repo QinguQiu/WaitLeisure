@@ -38,6 +38,11 @@ import androidx.compose.foundation.layout.statusBars
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
+import com.waitleisure.ui.rememberGridDragDropState
+import com.waitleisure.ui.gridDraggableItem
+import com.waitleisure.ui.gridDragContainer
+import androidx.compose.foundation.lazy.grid.rememberLazyGridState
+import androidx.compose.foundation.lazy.grid.itemsIndexed
 import androidx.compose.foundation.lazy.grid.items
 import androidx.compose.foundation.pager.HorizontalPager
 import androidx.compose.foundation.pager.rememberPagerState
@@ -783,15 +788,26 @@ private fun WhitelistSection(
             fontSize = 12.sp
         )
         Spacer(Modifier.height(14.dp))
+        // 按用户排过的顺序显示；没排过的按字母序排在后面
+        val ordered = remember(packages) { Repos.whitelist.sortBySavedOrder(packages) }
+        val gridState = rememberLazyGridState()
+        val dragState = rememberGridDragDropState(gridState) { from, to ->
+            Repos.whitelist.moveInList(ordered, from, to)
+        }
         LazyVerticalGrid(
+            state = gridState,
             columns = GridCells.Fixed(4),
             contentPadding = PaddingValues(bottom = 8.dp),
             horizontalArrangement = Arrangement.spacedBy(10.dp),
             verticalArrangement = Arrangement.spacedBy(16.dp),
-            modifier = Modifier.fillMaxWidth()
+            modifier = Modifier
+                .fillMaxWidth()
+                .gridDragContainer(dragState)
         ) {
-            items(packages, key = { it }) { pkg ->
-                AppEntry(packageName = pkg, onClick = { onLaunch(pkg) })
+            itemsIndexed(ordered, key = { _, pkg -> pkg }) { index, pkg ->
+                Box(Modifier.gridDraggableItem(dragState, index)) {
+                    AppEntry(packageName = pkg, onClick = { onLaunch(pkg) })
+                }
             }
         }
     }

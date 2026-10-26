@@ -55,6 +55,24 @@ class WhitelistRepository(private val prefs: AppPrefs) {
      *
      * 只动"顺序"，不动"在不在"—— 白名单归属仍由 Set 决定。
      */
+    /** 把任意白名单子集（全局 ∪ 本次分组）按保存过的顺序排好，没排过的追加在后面。 */
+    fun sortBySavedOrder(packages: List<String>): List<String> {
+        val saved = prefs.whitelistDisplayOrder
+            .split("\n")
+            .map { it.trim() }
+            .filter { it.isNotEmpty() && it in packages }
+        val rest = packages.filterNot { it in saved }.sorted()
+        return saved + rest
+    }
+
+    /** 拖动排序：按给定的完整列表顺序落盘（用于锁机页那种"全局 ∪ 分组"的合并列表）。 */
+    fun moveInList(list: List<String>, from: Int, to: Int) {
+        if (from !in list.indices || to !in list.indices || from == to) return
+        val next = list.toMutableList()
+        next.add(to, next.removeAt(from))
+        prefs.whitelistDisplayOrder = next.joinToString("\n".toString())
+    }
+
     fun move(from: Int, to: Int) {
         val list = ordered().toMutableList()
         if (from !in list.indices || to !in list.indices || from == to) return
