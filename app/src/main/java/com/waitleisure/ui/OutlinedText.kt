@@ -24,7 +24,8 @@ import androidx.compose.ui.unit.TextUnit
  * **不要影响壁纸观感**，所以改从文字入手：加一圈细描边，
  * 无论底下是白墙还是繁花，字的轮廓都立得住。
  *
- * 描边宽度默认 2.5f，视觉上刚好是一条发丝线 —— 远看几乎察觉不到，
+ * 描边用**纯黑、1.5f**：半透明黑看起来像"投影"（用户明确不要那个观感），
+ * 实心黑的细线才是轮廓。宽度再大就会有字幕感。
  * 近看能把白色填充和浅色背景隔开。
  *
  * ## 为什么用 Box 叠两层而不是 drawStyle 单独画
@@ -48,8 +49,8 @@ fun OutlinedText(
     textAlign: TextAlign? = null,
     maxLines: Int = Int.MAX_VALUE,
     overflow: TextOverflow = TextOverflow.Clip,
-    strokeColor: Color = Color(0xB3000000),
-    strokeWidth: Float = 2.5f
+    strokeColor: Color = Color(0xFF000000),
+    strokeWidth: Float = 1.5f
 ) {
     Box(modifier = modifier) {
         // 底层：只描边，不填充
