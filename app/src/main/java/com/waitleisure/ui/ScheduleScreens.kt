@@ -307,6 +307,10 @@ fun ScheduleEditScreen(scheduleId: Long, onDone: () -> Unit) {
 
     // 规则的名字。可以留空 —— 留空时列表就只显示时刻，和以前一样。
     var scheduleName by remember { mutableStateOf(existing?.name ?: "") }
+    // 严格模式：-1 跟随全局 / 0 强制严格 / 1 强制允许
+    var strictMode by remember {
+        mutableIntStateOf(existing?.strictMode ?: Schedule.STRICT_FOLLOW_GLOBAL)
+    }
 
     // 「执行任务」模式：锁什么由任务决定，本页不再设时长
     val tasks = remember { Repos.tasks.current() }
@@ -356,6 +360,47 @@ fun ScheduleEditScreen(scheduleId: Long, onDone: () -> Unit) {
             )
         }
 
+        SectionCard(
+            title = "严格模式",
+            subtitle = when (strictMode) {
+                Schedule.STRICT_ON -> "锁定期间无法解除"
+                Schedule.STRICT_OFF -> "允许密码解锁"
+                else -> "跟随全局设置"
+            }
+        ) {
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                TextButton(onClick = { strictMode = Schedule.STRICT_FOLLOW_GLOBAL }) {
+                    Text(
+                        text = "跟随全局",
+                        color = if (strictMode == Schedule.STRICT_FOLLOW_GLOBAL) {
+                            MaterialTheme.colorScheme.primary
+                        } else {
+                            MaterialTheme.colorScheme.onSurfaceVariant
+                        }
+                    )
+                }
+                TextButton(onClick = { strictMode = Schedule.STRICT_ON }) {
+                    Text(
+                        text = "严格",
+                        color = if (strictMode == Schedule.STRICT_ON) {
+                            MaterialTheme.colorScheme.primary
+                        } else {
+                            MaterialTheme.colorScheme.onSurfaceVariant
+                        }
+                    )
+                }
+                TextButton(onClick = { strictMode = Schedule.STRICT_OFF }) {
+                    Text(
+                        text = "允许解锁",
+                        color = if (strictMode == Schedule.STRICT_OFF) {
+                            MaterialTheme.colorScheme.primary
+                        } else {
+                            MaterialTheme.colorScheme.onSurfaceVariant
+                        }
+                    )
+                }
+            }
+        }
         SectionCard(title = "起始时间", subtitle = startMinutes.toHhMm()) {
             // 用和「立即锁机」同一个 DurationPicker：两列数字，精确到 1 分钟。
             // 之前这里是 FilterChip 拼的小时 + 5 分钟一档的分钟，选不到 :57 这种时刻。
@@ -682,6 +727,7 @@ fun ScheduleEditScreen(scheduleId: Long, onDone: () -> Unit) {
                     val base = existing ?: Schedule(id = Repos.schedules.nextId())
                     val saved = base.copy(
                         name = scheduleName.trim(),
+                        strictMode = strictMode,
                         startMinutes = startMinutes,
                         durationMinutes = durationBetween(startMinutes, endMinutes),
                         days = days,

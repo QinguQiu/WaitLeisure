@@ -56,7 +56,14 @@ data class Schedule(
     val days: Set<Int> = setOf(1, 2, 3, 4, 5, 6, 7),
     val holidayMode: HolidayMode = HolidayMode.IGNORE,
     val taskId: Long = -1L,
-    val whitelistGroupId: Long = -1L
+    val whitelistGroupId: Long = -1L,
+    /**
+     * 严格模式覆盖：-1 跟随全局设置，0 强制严格（不能解除），1 强制允许解锁。
+     *
+     * 用 Int 而不是 Boolean?：SharedPreferences / JSON 都没有可空布尔，
+     * 三态用 -1/0/1 最省事，也不用管老数据。
+     */
+    val strictMode: Int = STRICT_FOLLOW_GLOBAL
 ) {
     /** 是否走「执行任务」模式。 */
     val usesTask: Boolean get() = taskId >= 0L
@@ -71,6 +78,16 @@ data class Schedule(
         const val MINUTES_PER_DAY = 24 * 60
         const val NO_TASK = -1L
         const val NO_GROUP = -1L
+
+        /** 严格模式：跟随全局。 */
+        const val STRICT_FOLLOW_GLOBAL = -1
+
+        /** 严格模式：强制开启（锁定期间不能解除）。 */
+        const val STRICT_ON = 0
+
+        /** 严格模式：强制关闭（允许密码解锁）。 */
+        const val STRICT_OFF = 1
+    }
     }
 }
 

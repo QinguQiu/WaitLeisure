@@ -44,6 +44,24 @@ class AppPrefs(context: Context) {
         set(value) = sp.edit().putLong(KEY_ACTIVE_SCHEDULE, value).apply()
 
     /** 是否允许锁机时通过 PIN 解锁。false = 严格锁，锁机页不显示解锁按钮，只能等时间到。 */
+    /**
+     * 本次锁定对「允许密码解锁」的覆盖：-1 跟随全局，0 强制严格，1 强制允许。
+     *
+     * 定时规则可以单独指定严格模式 —— 比如「睡前」要严格，「午休」允许解锁。
+     * 锁机时由 LockController 写进来，解锁时清回 -1。
+     */
+    var activeAllowPinUnlockOverride: Int
+        get() = sp.getInt(KEY_ACTIVE_ALLOW_PIN, -1)
+        set(value) = sp.edit().putInt(KEY_ACTIVE_ALLOW_PIN, value).apply()
+
+    /** 本次锁定实际是否允许密码解锁（考虑规则覆盖）。 */
+    val effectiveAllowPinUnlock: Boolean
+        get() = when (activeAllowPinUnlockOverride) {
+            0 -> false
+            1 -> true
+            else -> allowPinUnlock
+        }
+
     var allowPinUnlock: Boolean
         get() = sp.getBoolean(KEY_ALLOW_PIN_UNLOCK, true)
         set(value) = sp.edit().putBoolean(KEY_ALLOW_PIN_UNLOCK, value).apply()
@@ -214,6 +232,7 @@ class AppPrefs(context: Context) {
     const val KEY_TASKS = "tasks"
     const val KEY_ACTIVE_GROUP = "active_whitelist_group"
     const val KEY_ACTIVE_TASK_NAME = "active_task_name"
+    const val KEY_ACTIVE_ALLOW_PIN = "active_allow_pin_unlock"
     const val KEY_LAST_SIMPLE_TASK = "last_simple_task"
     const val KEY_LAST_POMODORO_TASK = "last_pomodoro_task"
         const val KEY_POMODORO_CONFIG = "pomodoro_config"

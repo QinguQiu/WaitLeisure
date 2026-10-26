@@ -72,6 +72,7 @@ class ScheduleRepository(private val prefs: AppPrefs) {
                     put("holidayMode", s.holidayMode.name)
                     put("taskId", s.taskId)
                     put("whitelistGroupId", s.whitelistGroupId)
+            put("strictMode", s.strictMode)
                 }
             )
         }
@@ -99,7 +100,8 @@ class ScheduleRepository(private val prefs: AppPrefs) {
             // 老数据同样没有这两个字段 —— 默认「自带时长、只用全局白名单」，
             // 也就是升级前后行为完全一致
             taskId = json.optLong("taskId", Schedule.NO_TASK),
-            whitelistGroupId = json.optLong("whitelistGroupId", Schedule.NO_GROUP)
+            whitelistGroupId = json.optLong("whitelistGroupId", Schedule.NO_GROUP),
+            strictMode = json.optInt("strictMode", Schedule.STRICT_FOLLOW_GLOBAL)
         )
     }
 }

@@ -47,7 +47,7 @@ object ScheduleRunner {
                 TaskKind.SIMPLE_LOCK -> {
                     val end = now + task.durationMinutes * 60_000L
                     DiagLog.add("规则", "执行任务「${task.name}」：锁到 " + fmt(end))
-                    LockController.lock(context, end, schedule.id, groupId, taskName = task.name)
+                    LockController.lock(context, end, schedule.id, groupId, taskName = task.name, strictMode = schedule.strictMode)
                     end
                 }
 
@@ -68,7 +68,7 @@ object ScheduleRunner {
 
         // 自带时长（也包含「任务被删了」的兜底）
         val end = now + schedule.durationMinutes * 60_000L
-        LockController.lock(context, end, schedule.id, groupId)
+        LockController.lock(context, end, schedule.id, groupId, strictMode = schedule.strictMode)
         return end
     }
 

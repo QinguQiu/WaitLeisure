@@ -25,7 +25,8 @@ object LockController {
         untilMillis: Long,
         scheduleId: Long = -1L,
         whitelistGroupId: Long = -1L,
-        taskName: String = ""
+        taskName: String = "",
+        strictMode: Int = -1
     ) {
         Repos.ensure(context)
 
@@ -47,6 +48,8 @@ object LockController {
         Repos.prefs.activeWhitelistGroupId = whitelistGroupId
         // 记下本次是哪个任务触发的 —— 锁机页要显示出来
         Repos.prefs.activeTaskName = taskName
+        // 规则可以单独指定严格模式；-1 = 跟随全局
+        Repos.prefs.activeAllowPinUnlockOverride = strictMode
 
         Repos.lockState.lockUntil(untilMillis, scheduleId)
         startService(context)

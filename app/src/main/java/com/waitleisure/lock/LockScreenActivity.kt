@@ -714,7 +714,7 @@ private fun ExitPage(now: Long, onUnlock: () -> Unit) {
         horizontalAlignment = Alignment.CenterHorizontally,
         verticalArrangement = Arrangement.Center
     ) {
-        if (Repos.prefs.allowPinUnlock) {
+        if (Repos.prefs.effectiveAllowPinUnlock) {
             Text(text = "\uD83D\uDD13", fontSize = 28.sp)
             Spacer(Modifier.height(10.dp))
             Text(
