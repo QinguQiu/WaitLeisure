@@ -57,6 +57,12 @@ fun OutlinedText(
     // 若都靠左排，两层中心就差一两像素 —— 视觉上就是重影。
     Box(modifier = modifier) {
         val layer = Modifier.fillMaxWidth()
+        // 两层必须用**同一个行高**。
+        //
+        // Stroke 会让描边层的测量高度比填充层大一点点，行高不同 → 基线错开
+        // → 看起来就是上下重影（真机上 11sp 的小字特别明显）。
+        // 所以不指定行高时自己按字号定一个，两层都用它。
+        val lh = if (lineHeight == TextUnit.Unspecified) fontSize * 1.2f else lineHeight
         // 底层：只描边，不填充
         Text(
             text = text,
@@ -65,7 +71,7 @@ fun OutlinedText(
             fontSize = fontSize,
             fontWeight = fontWeight,
             fontStyle = fontStyle,
-            lineHeight = lineHeight,
+            lineHeight = lh,
             textAlign = textAlign ?: TextAlign.Center,
             maxLines = maxLines,
             overflow = overflow,
@@ -79,7 +85,7 @@ fun OutlinedText(
             fontSize = fontSize,
             fontWeight = fontWeight,
             fontStyle = fontStyle,
-            lineHeight = lineHeight,
+            lineHeight = lh,
             textAlign = textAlign ?: TextAlign.Center,
             maxLines = maxLines,
             overflow = overflow

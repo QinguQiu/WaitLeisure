@@ -71,6 +71,9 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.blur
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.graphics.Shadow
+import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.layout.ContentScale
@@ -88,6 +91,7 @@ import androidx.core.content.ContextCompat
 import androidx.core.graphics.drawable.toBitmap
 import com.waitleisure.R
 import com.waitleisure.data.Repos
+import com.waitleisure.ui.OutlinedText
 import com.waitleisure.ui.FramedWallpaper
 import com.waitleisure.ui.AppIcon
 import com.waitleisure.ui.rememberAppLabel
@@ -901,22 +905,26 @@ private fun AppEntry(packageName: String, onClick: () -> Unit) {
             backgroundColor = Color(0xFF1B1B1B)
         )
         Spacer(Modifier.height(6.dp))
-        // 名字垫一层半透明黑底。
+        // 名字用「单层文字 + 零偏移光晕」造出描边效果。
         //
-        // 浅灰字压在亮壁纸上几乎看不清（真机截图里「千问」「文件」就是这种）——
-        // 全局加渐变会牺牲壁纸，所以在文字自己下面垫一小块圆角底，
-        // 只遮住名字那一条，壁纸其余部分完全不动。
+        // 为什么不画两层：描边层的测量高度和填充层差一点点，两层叠起来就基线错开、
+        // 出现上下重影（真机 11sp 上特别明显，试了三版都没洗干净）。
+        // 单层 + Shadow(offset = 0) 只画一次，不可能错位；
+        // 视觉上就是字形周围一圈暗边，和描边几乎一样。
         Text(
             text = label,
-            color = Color(0xFFD6D6D6),
+            color = Color(0xFFE8E8E8),
             fontSize = 11.sp,
             maxLines = 1,
             overflow = TextOverflow.Ellipsis,
             textAlign = TextAlign.Center,
-            modifier = Modifier
-                .clip(RoundedCornerShape(6.dp))
-                .background(Color(0x8C000000))
-                .padding(horizontal = 6.dp, vertical = 2.dp)
+            style = TextStyle(
+                shadow = Shadow(
+                    color = Color(0xE6000000),
+                    offset = Offset.Zero,
+                    blurRadius = 4f
+                )
+            )
         )
     }
 }
