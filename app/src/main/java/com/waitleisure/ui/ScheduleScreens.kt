@@ -189,7 +189,7 @@ private fun ScheduleCard(
             .clickable(onClick = onClick),
         colors = CardDefaults.cardColors(
             containerColor = if (dim) {
-                MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.22f)
+                MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.11f)
             } else {
                 MaterialTheme.colorScheme.surface
             }
@@ -197,7 +197,7 @@ private fun ScheduleCard(
         elevation = CardDefaults.cardElevation(
             // 停用的卡片底色是半透明灰，再压阴影会显脏 —— 只有启用的才抬起来。
             // 卡片的**外框尺寸**两边一致，所以视觉上仍然对齐。
-            defaultElevation = if (dim) 0.dp else 0.25.dp
+            defaultElevation = if (dim) 0.dp else 1.dp
         )
     ) {
         Row(
