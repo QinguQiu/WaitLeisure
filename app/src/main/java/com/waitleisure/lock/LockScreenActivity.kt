@@ -885,7 +885,15 @@ private fun AppEntry(packageName: String, onClick: () -> Unit) {
 
     Column(
         horizontalAlignment = Alignment.CenterHorizontally,
-        modifier = Modifier.clickable(onClick = onClick)
+        // 宽度必须撑满格子。
+        //
+        // Column 默认是自适应宽度：名字长的应用会把这一格撑得比图标宽，
+        // 而图标是在「Column 的宽度」里居中 —— 于是名字长的那几列图标就偏了
+        // （用户反馈「名字很长的应用图标错位」）。
+        // 撑满之后所有格子同宽，图标自然对齐。
+        modifier = Modifier
+            .fillMaxWidth()
+            .clickable(onClick = onClick)
     ) {
         AppIcon(
             packageName = packageName,
@@ -898,7 +906,9 @@ private fun AppEntry(packageName: String, onClick: () -> Unit) {
             color = Color(0xFFBDBDBD),
             fontSize = 11.sp,
             maxLines = 1,
-            overflow = TextOverflow.Ellipsis
+            overflow = TextOverflow.Ellipsis,
+            textAlign = TextAlign.Center,
+            modifier = Modifier.fillMaxWidth()
         )
     }
 }
