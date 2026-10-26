@@ -30,6 +30,38 @@ class WhitelistRepository(private val prefs: AppPrefs) {
 
     fun replaceAll(packages: Set<String>) = update(packages)
 
+    /**
+     * 白名单的**有序**视图，给锁机页的网格用。
+     *
+     * 规则：
+     *   1. 先按用户排过的顺序出（存在 prefs 里，换行分隔）
+     *   2. 新加进来、还没排过的包名，按字母序追加在末尾
+     *   3. 已经不在白名单里的包名，自动跳过
+     *
+     * 这样拖过之后的顺序不会因为增删而乱掉。
+     */
+    fun ordered(): List<String> {
+        val all = _packages.value
+        val saved = prefs.whitelistDisplayOrder
+            .split("\\n")
+            .map { it.trim() }
+            .filter { it.isNotEmpty() && it in all }
+        val rest = all.filterNot { it in saved }.sorted()
+        return saved + rest
+    }
+
+    /**
+     * 拖动排序：把第 [from] 个移动到 [to] 位置，并持久化。
+     *
+     * 只动"顺序"，不动"在不在"—— 白名单归属仍由 Set 决定。
+     */
+    fun move(from: Int, to: Int) {
+        val list = ordered().toMutableList()
+        if (from !in list.indices || to !in list.indices || from == to) return
+        list.add(to, list.removeAt(from))
+        prefs.whitelistDisplayOrder = list.joinToString("\\n")
+    }
+
     private fun update(value: Set<String>) {
         prefs.whitelist = value
         _packages.value = value

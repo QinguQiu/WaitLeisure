@@ -18,6 +18,18 @@ class AppPrefs(context: Context) {
         get() = sp.getStringSet(KEY_WHITELIST, emptySet())?.toSet() ?: emptySet()
         set(value) = sp.edit().putStringSet(KEY_WHITELIST, value).apply()
 
+    /**
+     * 白名单的**显示顺序**（换行分隔的包名）。
+     *
+     * 白名单本身是 Set，无序 —— 但锁机页那个 4 列网格需要稳定顺序，
+     * 而且用户会想按自己的习惯排（常用的放前面）。
+     * 这里单独存一份顺序，和 Set 各管各的：Set 管"在不在"，它管"排第几"。
+     * 空字符串 = 还没排过，按包名排序兜底。
+     */
+    var whitelistDisplayOrder: String
+        get() = sp.getString(KEY_WHITELIST_ORDER, "") ?: ""
+        set(value) = sp.edit().putString(KEY_WHITELIST_ORDER, value).apply()
+
     /** 定时规则，JSON 数组字符串（用系统自带的 org.json，避免引入额外依赖）。 */
     var schedulesJson: String
         get() = sp.getString(KEY_SCHEDULES, "[]") ?: "[]"
@@ -233,6 +245,7 @@ class AppPrefs(context: Context) {
     const val KEY_ACTIVE_GROUP = "active_whitelist_group"
     const val KEY_ACTIVE_TASK_NAME = "active_task_name"
     const val KEY_ACTIVE_ALLOW_PIN = "active_allow_pin_unlock"
+    const val KEY_WHITELIST_ORDER = "whitelist_display_order"
     const val KEY_LAST_SIMPLE_TASK = "last_simple_task"
     const val KEY_LAST_POMODORO_TASK = "last_pomodoro_task"
         const val KEY_POMODORO_CONFIG = "pomodoro_config"
