@@ -5,6 +5,9 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.itemsIndexed
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Row
@@ -63,22 +66,34 @@ fun WhitelistScreen(
         if (apps.isNotEmpty()) prefetchAppIcons(apps.map { it.packageName })
     }
 
-    Column(
+    // 长按拖动排序需要 LazyColumn 才能拿到每个条目的位置，
+    // 所以整页从 Column+verticalScroll 改成了 LazyColumn。
+    // 全局白名单和「分组」小标题各占一个 item，分组本身走 itemsIndexed。
+    val listState = rememberLazyListState()
+    val dragState = rememberDragDropState(listState) { from, to ->
+        Repos.groups.move(from, to)
+    }
+
+    LazyColumn(
+        state = listState,
         modifier = Modifier
             .fillMaxSize()
-            .verticalScroll(rememberScrollState())
+            .dragContainer(dragState)
             .padding(16.dp),
         verticalArrangement = Arrangement.spacedBy(12.dp)
     ) {
         // ------------------------------------------------ 全局白名单（最上）
+        item {
         WhitelistBox(
             title = "全局白名单",
             subtitle = "始终放行 · 已选 ${whitelist.size} 个应用",
             packages = whitelist,
             onClick = onOpenGlobal
         )
+        }
 
         // ------------------------------------------------ 分组
+        item {
         Row(
             modifier = Modifier.fillMaxWidth(),
             verticalAlignment = Alignment.CenterVertically
@@ -98,16 +113,20 @@ fun WhitelistScreen(
             }
             TextButton(onClick = onNewGroup) { Text("＋ 新建分组") }
         }
+        }
 
         if (groups.isEmpty()) {
+            item {
             Text(
                 text = "还没有分组。点右上角「＋ 新建分组」建一个。",
                 fontSize = 12.sp,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                 modifier = Modifier.padding(start = 4.dp)
             )
+            }
         } else {
-            groups.forEach { group ->
+            itemsIndexed(groups, key = { _, g -> g.id }) { index, group ->
+                Box(Modifier.draggableItem(dragState, index)) {
                 WhitelistBox(
                     title = group.name,
                     // 分组已经不带到生效时段了 —— 什么时候用哪一组由定时规则说了算
@@ -116,10 +135,11 @@ fun WhitelistScreen(
                     dimmed = false,
                     onClick = { onOpenGroup(group.id) }
                 )
+                }
             }
         }
 
-        Spacer(Modifier.height(8.dp))
+        item { Spacer(Modifier.height(8.dp)) }
     }
 }
 

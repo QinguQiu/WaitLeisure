@@ -66,6 +66,18 @@ class WhitelistGroupRepository(private val prefs: AppPrefs) {
 
     fun remove(id: Long) = update(_groups.value.filter { it.id != id })
 
+    /**
+     * 拖动排序：把第 [from] 个分组移动到 [to] 位置。
+     *
+     * 顺序就是 JSON 数组顺序，不用加新字段 —— 老数据读出来还是原来的顺序。
+     */
+    fun move(from: Int, to: Int) {
+        val list = _groups.value.toMutableList()
+        if (from !in list.indices || to !in list.indices || from == to) return
+        list.add(to, list.removeAt(from))
+        update(list)
+    }
+
     fun nextId(): Long = (_groups.value.maxOfOrNull { it.id } ?: 0L) + 1
 
     private fun update(next: List<WhitelistGroup>) {
