@@ -3,6 +3,7 @@ package com.waitleisure.ui
 import android.content.Context
 import android.graphics.BitmapFactory
 import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.PickVisualMediaRequest
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -115,8 +116,14 @@ fun SettingsScreen(onOpenTasks: () -> Unit = {}) {
     //
     // 为什么要临时文件：以前是选完直接覆盖 wallpaper.jpg，于是用户在取景页
     // 点「取消」也回天乏术 —— 旧壁纸已经被冲掉了。现在取消 = 什么都没发生。
+    //
+    // 为什么用 PickVisualMedia 而不是 GetContent：
+    // GetContent 拉起的是**系统文件浏览器**（documentsui），左边只有「最近/下载/图片」
+    // 这类目录，没有「相册」分类 —— 用户找自己相册里的照片很别扭。
+    // PickVisualMedia 走的是 Android 13+ 的系统 Photo Picker（旧系统自动回落），
+    // 界面就是相册那种网格，带「照片 / 相册」分类。
     val wallpaperPicker = rememberLauncherForActivityResult(
-        ActivityResultContracts.GetContent()
+        ActivityResultContracts.PickVisualMedia()
     ) { uri ->
         if (uri != null) {
             val decoded = runCatching {
@@ -235,7 +242,11 @@ fun SettingsScreen(onOpenTasks: () -> Unit = {}) {
             }
             Spacer(Modifier.height(10.dp))
             Row {
-                TextButton(onClick = { wallpaperPicker.launch("image/*") }) {
+                TextButton(onClick = {
+                        wallpaperPicker.launch(
+                            PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly)
+                        )
+                    }) {
                     Text(if (Repos.prefs.wallpaperImagePath == null) "选择图片…" else "换一张图片…")
                 }
                 if (Repos.prefs.wallpaperImagePath != null) {
