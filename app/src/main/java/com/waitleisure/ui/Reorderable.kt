@@ -100,9 +100,14 @@ class DragDropState(
         }
         if (target != null) {
             val targetData = toDataIndex(target.index)
+            // 换位后这个条目自己会挪到目标槽位（位移 = item.offset - target.offset）。
+            //
+            // 所以不能把拖动偏移清零 —— 清零就等于让卡片"甩回"新槽位，
+            // 手指和卡片之间突然多出一段距离（用户反馈「换位时位移突然变大」）。
+            // 正确做法是把这段位移补进偏移，让**视觉位置保持不变**。
+            val visualY = item.offset + draggingOffset
             onMove(current, targetData)
-            // 换位后坐标基准变了，清掉累计位移，避免条目"跳一下"
-            draggingOffset = 0f
+            draggingOffset = visualY - target.offset
             draggingIndex = targetData
             return
         }
