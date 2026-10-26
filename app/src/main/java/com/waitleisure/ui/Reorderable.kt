@@ -64,6 +64,12 @@ class DragDropState(
     var draggingOffset by mutableFloatStateOf(0f)
         private set
 
+    /** 手指按下点相对条目顶部的偏移。绝对定位的基准，拖多久都不会漂。 */
+    private var grabOffset = 0f
+
+    /** 上一次的指针 Y，用来算自动滚动的增量。 */
+    private var lastPointerY = 0f
+
     /** 拖到边缘时的自动滚动：累计的越界量。 */
     private var scrollAccumulator = 0f
     private val scrollThreshold = 48.dp
@@ -77,20 +83,37 @@ class DragDropState(
         }
         draggingOffset = 0f
         scrollAccumulator = 0f
+        lastPointerY = offset.y
+        // 记住"手指按在条目内部哪个位置"——之后全靠它反推条目该画在哪
+        grabOffset = if (item != null) offset.y - item.offset else 0f
         draggingIndex = item?.let { toDataIndex(it.index) }
     }
 
-    fun onDrag(delta: Offset, density: Float) {
+    /**
+     * @param pointerY 手指的**绝对** Y 坐标（不是增量）。
+     *
+     * 为什么用绝对值：早先是累加 delta，换位时再补偿一次「条目自己挪了多少」。
+     * 快速拖动一帧里换好几次位，补偿就积误差 —— 表现是卡片慢慢跑偏、
+     * 和手指错开一大截。改成绝对定位后，每帧都从 pointerY 反推，
+     * 误差不会累积。
+     */
+    fun onDrag(pointerY: Float, density: Float) {
         val current = draggingIndex ?: return
         // 拖着的还是页头（拖动从 header 上开始）——不参与排序
         if (current < 0) return
-        draggingOffset += delta.y
+
+        val deltaY = pointerY - lastPointerY
+        lastPointerY = pointerY
 
         val item = listState.layoutInfo.visibleItemsInfo
             .firstOrNull { toDataIndex(it.index) == current } ?: return
 
-        // 被拖条目的当前视觉中心
-        val centerY = item.offset + draggingOffset + item.size / 2f
+        // 条目顶部本该在的位置 = 手指位置 - 按下时的抓取偏移
+        val targetTop = pointerY - grabOffset
+        draggingOffset = targetTop - item.offset
+
+        // 被拖条目的当前视觉中心（用绝对位置算，不用累加值）
+        val centerY = targetTop + item.size / 2f
         // 中心越过某个邻居的区间就换位
         val target = listState.layoutInfo.visibleItemsInfo.firstOrNull { other ->
             val otherData = toDataIndex(other.index)
@@ -99,16 +122,10 @@ class DragDropState(
                 centerY in other.offset.toFloat()..(other.offset + other.size).toFloat()
         }
         if (target != null) {
-            val targetData = toDataIndex(target.index)
-            // 换位后这个条目自己会挪到目标槽位（位移 = item.offset - target.offset）。
-            //
-            // 所以不能把拖动偏移清零 —— 清零就等于让卡片"甩回"新槽位，
-            // 手指和卡片之间突然多出一段距离（用户反馈「换位时位移突然变大」）。
-            // 正确做法是把这段位移补进偏移，让**视觉位置保持不变**。
-            val visualY = item.offset + draggingOffset
-            onMove(current, targetData)
-            draggingOffset = visualY - target.offset
-            draggingIndex = targetData
+            // 换位就完事了 —— 位移下一帧会按 pointerY 重新算，天然跟手，
+            // 不需要再补偿什么（补偿正是快速拖动时跑偏的原因）。
+            onMove(current, toDataIndex(target.index))
+            draggingIndex = toDataIndex(target.index)
             return
         }
 
@@ -119,7 +136,7 @@ class DragDropState(
         val viewportY = item.offset + draggingOffset
 
         if (viewportY < top || viewportY + item.size > bottom) {
-            scrollAccumulator += delta.y
+            scrollAccumulator += deltaY
         } else {
             scrollAccumulator = 0f
         }
@@ -157,9 +174,10 @@ fun Modifier.dragContainer(dragDrop: DragDropState): Modifier {
     return pointerInput(dragDrop) {
         val density = this.density
         detectDragGesturesAfterLongPress(
-            onDrag = { change, offset ->
+            onDrag = { change, _ ->
                 change.consume()
-                dragDrop.onDrag(offset, density)
+                // 传绝对坐标，不是增量 —— 避免快速拖动时误差累积
+                dragDrop.onDrag(change.position.y, density)
             },
             onDragStart = { offset -> dragDrop.onDragStart(offset) },
             onDragEnd = { dragDrop.onDragInterrupted() },

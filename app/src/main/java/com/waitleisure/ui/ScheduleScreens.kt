@@ -194,7 +194,11 @@ private fun ScheduleCard(
                 MaterialTheme.colorScheme.surface
             }
         ),
-        elevation = CardDefaults.cardElevation(defaultElevation = 1.dp)
+        elevation = CardDefaults.cardElevation(
+            // 停用的卡片底色是半透明灰，再压阴影会显脏 —— 只有启用的才抬起来。
+            // 卡片的**外框尺寸**两边一致，所以视觉上仍然对齐。
+            defaultElevation = if (dim) 0.dp else 1.dp
+        )
     ) {
         Row(
             modifier = Modifier.padding(horizontal = 16.dp, vertical = 14.dp),
