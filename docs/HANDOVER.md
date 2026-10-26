@@ -5,6 +5,25 @@
 
 ---
 
+
+---
+
+## 0. 硬性约定：不要自作主张推送 / 发版
+
+**只有用户明确说「推送」「发版」「打 tag」时才执行 push / tag。**
+
+平时的工作流是：
+
+1. 改代码
+2. 本地 `assembleRelease` + `testDebugUnitTest` + `tools\verify.ps1` 验证
+3. **停在这里**，把改了什么、验证结果报给用户
+
+不要每次小改动都顺手升 versionName + 打 tag + push —— 
+一个 tag 会触发一次 GitHub Actions 构建并生成一个 Release，
+一天发十几个版本既污染 Releases 页面，也让用户没法判断哪个是"正式的"。
+
+版本号也只在**用户确认要发版时**才改。
+
 ## 一、项目基本事实
 
 | | |
