@@ -19,6 +19,7 @@ import androidx.savedstate.SavedStateRegistryController
 import androidx.savedstate.SavedStateRegistryOwner
 import androidx.savedstate.setViewTreeSavedStateRegistryOwner
 import com.waitleisure.util.DiagLog
+import com.waitleisure.data.Repos
 import com.waitleisure.util.Permissions
 
 /**
@@ -65,6 +66,9 @@ object LockOverlay {
 
     fun show(context: Context, reason: String) {
         if (isShowing) return
+        // 没锁着就绝不盖：番茄钟休息期间 locked_until 是空的，
+        // 任何残留的 show 调用都会让遮罩一闪一闪（用户实测「悬浮窗闪烁」）。
+        if (!Repos.lockState.isLockedNow()) return
         if (!canShow(context)) return
 
         // 无障碍服务没在跑时**绝不盖遮罩**。
