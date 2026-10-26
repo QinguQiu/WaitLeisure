@@ -1,6 +1,7 @@
 package com.waitleisure.ui
 
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.material3.LocalContentColor
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -52,16 +53,20 @@ fun OutlinedText(
     strokeColor: Color = Color(0xFF000000),
     strokeWidth: Float = 1.5f
 ) {
+    // 两层必须同宽同对齐：描边层因为 Stroke 会把测量宽度撑大一点，
+    // 若都靠左排，两层中心就差一两像素 —— 视觉上就是重影。
     Box(modifier = modifier) {
+        val layer = Modifier.fillMaxWidth()
         // 底层：只描边，不填充
         Text(
             text = text,
+            modifier = layer,
             color = strokeColor,
             fontSize = fontSize,
             fontWeight = fontWeight,
             fontStyle = fontStyle,
             lineHeight = lineHeight,
-            textAlign = textAlign,
+            textAlign = textAlign ?: TextAlign.Center,
             maxLines = maxLines,
             overflow = overflow,
             style = TextStyle(drawStyle = Stroke(width = strokeWidth))
@@ -69,12 +74,13 @@ fun OutlinedText(
         // 上层：正常填充
         Text(
             text = text,
+            modifier = layer,
             color = color,
             fontSize = fontSize,
             fontWeight = fontWeight,
             fontStyle = fontStyle,
             lineHeight = lineHeight,
-            textAlign = textAlign,
+            textAlign = textAlign ?: TextAlign.Center,
             maxLines = maxLines,
             overflow = overflow
         )

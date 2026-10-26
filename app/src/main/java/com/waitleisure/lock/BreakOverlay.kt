@@ -127,16 +127,26 @@ object BreakOverlay {
                                 hide()
                             },
                             onDrag = { dx, dy ->
-                                // gravity 靠右时 x 是「距右边缘」，所以往右拖是减
-                                params.x -= dx.toInt()
+                                // params.x 的基准会随 gravity 变：
+                                //   END   时是「距右边缘」→ 往右拖要减
+                                //   START 时是「距左边缘」→ 往右拖要加
+                                // 不区分的话，吸附到左边之后拖动方向就是反的（用户实测）。
+                                val rightAnchored = params.gravity and Gravity.END != 0
+                                params.x += if (rightAnchored) -dx.toInt() else dx.toInt()
                                 params.y = (params.y + dy.toInt()).coerceAtLeast(0)
                                 runCatching { wm.updateViewLayout(view, params) }
                             },
                             onRelease = {
-                                // 吸附：胶囊中点在屏幕左半 → 贴左，否则贴右
+                                // 吸附：胶囊中点在屏幕左半 → 贴左，否则贴右。
+                                // 距离一律按「距最近那条边」算，切换 gravity 时不会跳。
                                 val screenW = context.resources.displayMetrics.widthPixels
                                 val w = view.width.coerceAtLeast(1)
-                                val centerX = screenW - params.x - w / 2f
+                                val leftOffset = if (params.gravity and Gravity.END != 0) {
+                                    screenW - params.x - w
+                                } else {
+                                    params.x
+                                }
+                                val centerX = leftOffset + w / 2f
                                 params.gravity = if (centerX < screenW / 2f) {
                                     Gravity.TOP or Gravity.START
                                 } else {

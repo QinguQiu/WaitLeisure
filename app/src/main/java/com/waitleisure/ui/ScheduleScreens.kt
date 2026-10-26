@@ -189,7 +189,7 @@ private fun ScheduleCard(
             .clickable(onClick = onClick),
         colors = CardDefaults.cardColors(
             containerColor = if (dim) {
-                MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.45f)
+                MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.22f)
             } else {
                 MaterialTheme.colorScheme.surface
             }

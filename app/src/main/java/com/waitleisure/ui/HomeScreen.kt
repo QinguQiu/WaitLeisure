@@ -102,7 +102,7 @@ fun HomeScreen(onOpenPermissions: () -> Unit) {
     var refreshKey by remember { mutableIntStateOf(0) }
     var copied by remember { mutableStateOf(false) }
     // 番茄钟状态存在 prefs 里而不是 StateFlow，所以靠 refreshKey 驱动重算
-    val pomodoroActive = remember(refreshKey) { Pomodoro.isActive() }
+    val pomodoroActive = Pomodoro.isActive()
     LaunchedEffect(Unit) {
         Repos.lockState.refresh()
     }
