@@ -30,6 +30,7 @@ import kotlin.math.abs
  * ```
  * val dragState = rememberDragDropState(listState) { from, to -> vm.move(from, to) }
  * LazyColumn(state = listState, modifier = Modifier.dragContainer(dragState)) {
+ *     item { 页头 }                       // ← 这种「非数据 item」有几个就传 headerCount 几
  *     itemsIndexed(items) { index, item ->
  *         Row(Modifier.draggableItem(dragState, index)) { ... }
  *     }
@@ -37,13 +38,25 @@ import kotlin.math.abs
  * ```
  *
  * **必须用 itemsIndexed** —— 换位时靠 index 才知道拎的是谁。
+ *
+ * ## headerCount 为什么必须传
+ *
+ * LazyColumn 的 `visibleItemsInfo[].index` 是**整个列表**的下标，
+ * 而 `itemsIndexed` 回调里拿到的是**数据列表**的下标。列表前面如果还有
+ * `item { 页头 }` 之类的非数据条目，两者就差这么多。
+ *
+ * 白名单页就踩过这个坑：前面有「全局白名单」和「分组」两个 item，
+ * 传进去的下标整体偏大 2，`move()` 里 `from !in list.indices` 直接返回 ——
+ * 表现是「拖了几乎没反应」。
  */
 class DragDropState(
     private val listState: LazyListState,
     private val scope: CoroutineScope,
+    /** 数据条目之前有多少个非数据 item（页头之类）。 */
+    private val headerCount: Int,
     private val onMove: (from: Int, to: Int) -> Unit
 ) {
-    /** 正在被拖的条目下标；null = 没在拖。 */
+    /** 正在被拖的条目下标（**数据下标**，不含 header）；null = 没在拖。 */
     var draggingIndex by mutableStateOf<Int?>(null)
         private set
 
@@ -55,34 +68,42 @@ class DragDropState(
     private var scrollAccumulator = 0f
     private val scrollThreshold = 48.dp
 
+    /** LazyColumn 下标 → 数据下标。 */
+    private fun toDataIndex(raw: Int): Int = raw - headerCount
+
     fun onDragStart(offset: Offset) {
         val item = listState.layoutInfo.visibleItemsInfo.firstOrNull { info ->
             offset.y in info.offset.toFloat()..(info.offset + info.size).toFloat()
         }
         draggingOffset = 0f
         scrollAccumulator = 0f
-        draggingIndex = item?.index
+        draggingIndex = item?.let { toDataIndex(it.index) }
     }
 
     fun onDrag(delta: Offset, density: Float) {
         val current = draggingIndex ?: return
+        // 拖着的还是页头（拖动从 header 上开始）——不参与排序
+        if (current < 0) return
         draggingOffset += delta.y
 
         val item = listState.layoutInfo.visibleItemsInfo
-            .firstOrNull { it.index == current } ?: return
+            .firstOrNull { toDataIndex(it.index) == current } ?: return
 
         // 被拖条目的当前视觉中心
         val centerY = item.offset + draggingOffset + item.size / 2f
         // 中心越过某个邻居的区间就换位
         val target = listState.layoutInfo.visibleItemsInfo.firstOrNull { other ->
-            other.index != current &&
+            val otherData = toDataIndex(other.index)
+            otherData >= 0 &&
+                otherData != current &&
                 centerY in other.offset.toFloat()..(other.offset + other.size).toFloat()
         }
         if (target != null) {
-            onMove(current, target.index)
+            val targetData = toDataIndex(target.index)
+            onMove(current, targetData)
             // 换位后坐标基准变了，清掉累计位移，避免条目"跳一下"
             draggingOffset = 0f
-            draggingIndex = target.index
+            draggingIndex = targetData
             return
         }
 
@@ -110,13 +131,20 @@ class DragDropState(
     }
 }
 
+/**
+ * @param headerCount 列表里数据条目之前的非数据 item 数量。
+ *        纯数据列表传 0 即可（定时页就是这种）。
+ */
 @Composable
 fun rememberDragDropState(
     listState: LazyListState,
+    headerCount: Int = 0,
     onMove: (from: Int, to: Int) -> Unit
 ): DragDropState {
     val scope = rememberCoroutineScope()
-    return remember(listState) { DragDropState(listState, scope, onMove) }
+    return remember(listState, headerCount) {
+        DragDropState(listState, scope, headerCount, onMove)
+    }
 }
 
 /** 挂在 LazyColumn 上，负责识别长按拖动。 */

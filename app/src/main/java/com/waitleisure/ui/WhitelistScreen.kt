@@ -70,7 +70,10 @@ fun WhitelistScreen(
     // 所以整页从 Column+verticalScroll 改成了 LazyColumn。
     // 全局白名单和「分组」小标题各占一个 item，分组本身走 itemsIndexed。
     val listState = rememberLazyListState()
-    val dragState = rememberDragDropState(listState) { from, to ->
+    // headerCount = 2：前面有「全局白名单」和「分组」两个非数据 item。
+    // 不传的话 itemsIndexed 的数据下标和 LazyColumn 的真实下标差 2，
+    // move() 收到的下标越界会被直接吞掉 —— 表现就是"拖了没反应"。
+    val dragState = rememberDragDropState(listState, headerCount = 2) { from, to ->
         Repos.groups.move(from, to)
     }
 
