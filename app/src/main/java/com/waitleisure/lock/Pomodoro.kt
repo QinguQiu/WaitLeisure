@@ -102,7 +102,14 @@ object Pomodoro {
          * 而不是重新从满 25 分钟开始（用户实测反馈过）。
          */
         startAtMillis: Long? = null,
-        taskName: String = ""
+        taskName: String = "",
+        /**
+         * 严格模式覆盖：-1 跟全局 / 0 强制严格 / 1 强制允许。
+         *
+         * 定时规则挂番茄钟任务时由规则传下来 —— 否则「睡前」要严格、
+         * 「午休」允许解锁这种配置对番茄钟就不生效了。
+         */
+        strictMode: Int = -1
     ) {
         // 任务自带的配置只作用于本次运行，不改用户设置里那份
         Repos.prefs.pomodoroRunConfig = configOverride ?: ""
@@ -124,7 +131,8 @@ object Pomodoro {
             maxOf(end, now + 60_000L),
             scheduleId = -1L,
             whitelistGroupId = whitelistGroupId,
-            taskName = taskName
+            taskName = taskName,
+            strictMode = strictMode
         )
     }
 
@@ -180,7 +188,8 @@ object Pomodoro {
                 context,
                 nextEnd,
                 scheduleId = -1L,
-                whitelistGroupId = Repos.prefs.activeWhitelistGroupId
+                whitelistGroupId = Repos.prefs.activeWhitelistGroupId,
+                strictMode = Repos.prefs.activeAllowPinUnlockOverride
             )
         }
         return true

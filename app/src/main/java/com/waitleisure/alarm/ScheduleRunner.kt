@@ -58,7 +58,8 @@ object ScheduleRunner {
                         configOverride = task.pomodoroConfig,
                         whitelistGroupId = groupId,
                         startAtMillis = windowStartMillis,
-                        taskName = task.name
+                        taskName = task.name,
+                        strictMode = schedule.strictMode
                     )
                     // 番茄钟的结束时刻由它自己的相位推进决定，这里给不出单一时刻
                     null
