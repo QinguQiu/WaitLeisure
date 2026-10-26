@@ -194,7 +194,7 @@ private fun ScheduleCard(
                 MaterialTheme.colorScheme.surface
             }
         ),
-        elevation = CardDefaults.cardElevation(defaultElevation = if (dim) 0.dp else 1.dp)
+        elevation = CardDefaults.cardElevation(defaultElevation = 1.dp)
     ) {
         Row(
             modifier = Modifier.padding(horizontal = 16.dp, vertical = 14.dp),
@@ -211,6 +211,8 @@ private fun ScheduleCard(
                         text = schedule.name,
                         fontSize = 13.sp,
                         fontWeight = FontWeight.SemiBold,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
                         color = titleColor
                     )
                     Spacer(Modifier.height(2.dp))
@@ -233,6 +235,8 @@ private fun ScheduleCard(
                         },
                         fontSize = 12.sp,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
                         modifier = Modifier.padding(bottom = 4.dp)
                     )
                 }

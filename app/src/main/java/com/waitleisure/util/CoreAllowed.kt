@@ -41,7 +41,31 @@ object CoreAllowed {
         val set = mutableSetOf(
             "android",
             "com.android.systemui",
-            "com.android.permissioncontroller"
+            "com.android.permissioncontroller",
+
+            // ---- 系统「选文件 / 选图片」的界面 ----
+            //
+            // 不豁免的话，在白名单应用里点「发送图片」会被锁机拦下来 ——
+            // 弹出的相册/文件选择器不属于白名单应用，遮罩直接把选图页盖住，
+            // 图片根本发不出去（用户实测反馈）。
+            //
+            // 这些是系统组件，不是用户可以打开的普通应用，放行它们不会削弱锁机：
+            //   · documentsui      系统文件选择器（AOSP）
+            //   · intentresolver   系统「用哪个应用打开」对话框
+            //   · media            系统相册/媒体存储的 Picker
+            //   · photopicker      Android 14+ 的 Photo Picker
+            "com.android.documentsui",
+            "com.google.android.documentsui",
+            "com.android.intentresolver",
+            "com.android.providers.media.module",
+            "com.android.providers.media",
+            "com.google.android.providers.media.module",
+            "com.android.photopicker",
+            // MIUI / HyperOS 自家的选图与文件选择
+            "com.miui.gallery",
+            "com.miui.gallery.picker",
+            "com.android.fileexplorer",
+            "com.miui.securitycenter"
         )
         currentImePackage(context)?.let(set::add)
         defaultDialerPackage(context)?.let(set::add)

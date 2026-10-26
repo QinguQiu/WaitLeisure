@@ -7,6 +7,8 @@ import android.view.Gravity
 import android.view.View
 import android.view.WindowManager
 import androidx.compose.foundation.background
+import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.foundation.gestures.detectDragGestures
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Row
@@ -93,22 +95,6 @@ object BreakOverlay {
                 ?: error("拿不到 WindowManager")
 
             val owner = BreakOverlayOwner()
-            val view = ComposeView(context).apply {
-                setViewTreeLifecycleOwner(owner)
-                setViewTreeSavedStateRegistryOwner(owner)
-                setContent {
-                    MaterialTheme(colorScheme = darkColorScheme()) {
-                        BreakPill(
-                            endAt = endAt,
-                            onClose = {
-                                dismissed = true
-                                hide()
-                            }
-                        )
-                    }
-                }
-            }
-
             val params = WindowManager.LayoutParams(
                 WindowManager.LayoutParams.WRAP_CONTENT,
                 WindowManager.LayoutParams.WRAP_CONTENT,
@@ -125,6 +111,45 @@ object BreakOverlay {
                 y = if (resId > 0) context.resources.getDimensionPixelSize(resId) + 8 else 24
                 x = 12
             }
+
+            // 用 lateinit：拖动回调里要用 view 去 updateViewLayout，
+            // 而它是在 ComposeView 自己的初始化块里被引用的（自引用）。
+            lateinit var view: ComposeView
+            view = ComposeView(context).apply {
+                setViewTreeLifecycleOwner(owner)
+                setViewTreeSavedStateRegistryOwner(owner)
+                setContent {
+                    MaterialTheme(colorScheme = darkColorScheme()) {
+                        BreakPill(
+                            endAt = endAt,
+                            onClose = {
+                                dismissed = true
+                                hide()
+                            },
+                            onDrag = { dx, dy ->
+                                // gravity 靠右时 x 是「距右边缘」，所以往右拖是减
+                                params.x -= dx.toInt()
+                                params.y = (params.y + dy.toInt()).coerceAtLeast(0)
+                                runCatching { wm.updateViewLayout(view, params) }
+                            },
+                            onRelease = {
+                                // 吸附：胶囊中点在屏幕左半 → 贴左，否则贴右
+                                val screenW = context.resources.displayMetrics.widthPixels
+                                val w = view.width.coerceAtLeast(1)
+                                val centerX = screenW - params.x - w / 2f
+                                params.gravity = if (centerX < screenW / 2f) {
+                                    Gravity.TOP or Gravity.START
+                                } else {
+                                    Gravity.TOP or Gravity.END
+                                }
+                                params.x = 12
+                                runCatching { wm.updateViewLayout(view, params) }
+                            }
+                        )
+                    }
+                }
+            }
+
 
             wm.addView(view, params)
             overlayView = view
@@ -159,7 +184,12 @@ object BreakOverlay {
  * 每秒自己重算一次剩余时间 —— 不用外面推，窗口存活期间自洽。
  */
 @androidx.compose.runtime.Composable
-private fun BreakPill(endAt: Long, onClose: () -> Unit) {
+private fun BreakPill(
+    endAt: Long,
+    onClose: () -> Unit,
+    onDrag: (Float, Float) -> Unit,
+    onRelease: () -> Unit
+) {
     // 每秒 tick 一次，驱动倒计时
     val remaining by produceState(initialValue = (endAt - System.currentTimeMillis()).coerceAtLeast(0L), endAt) {
         while (true) {
@@ -174,6 +204,17 @@ private fun BreakPill(endAt: Long, onClose: () -> Unit) {
 
     Row(
         modifier = Modifier
+            // 拖动整颗胶囊（不是只拖 × 那块），松手吸附到边缘
+            .pointerInput(Unit) {
+                detectDragGestures(
+                    onDrag = { change, delta ->
+                        change.consume()
+                        onDrag(delta.x, delta.y)
+                    },
+                    onDragEnd = { onRelease() },
+                    onDragCancel = { onRelease() }
+                )
+            }
             .clip(RoundedCornerShape(20.dp))
             .background(Color(0xE6202124))
             .padding(start = 14.dp, end = 6.dp, top = 8.dp, bottom = 8.dp),
