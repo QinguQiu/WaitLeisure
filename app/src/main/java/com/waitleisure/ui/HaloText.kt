@@ -19,7 +19,7 @@ import androidx.compose.ui.unit.TextUnit
  *
  * ## 为什么不是"描边"
  *
- * 之前试过用两层 [Text] 叠描边（[OutlinedText]），四个版本都没洗干净重影：
+ * 之前试过用两层 [Text] 叠描边(那个组件已删除)，四个版本都没洗干净重影：
  * 描边层的测量高度、宽度和填充层总有细微差别，两层叠起来就基错位。
  *
  * 现在改成**只画一次** + `Shadow(offset = Zero, blurRadius = ...)`：

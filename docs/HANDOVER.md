@@ -89,7 +89,11 @@ powershell -ExecutionPolicy Bypass -File tools\verify.ps1
 7. **列表里的名字别用字符串拼进大字号 Text** —— 会继承字号撑爆行宽
    （定时规则的名字栏踩过，后来改成独立 13sp 一行）
 
-8. **CI 的 Release job 会失败于「Release 已存在」** —— tag 建了之后如果再改代码重推 tag，
+8. **CI 的 Release job 会失败于「Release 已存在」**
+9. **不要用「两层文字叠描边」** —— 描边层的测量宽高和填充层总有细微差别，
+   两层叠起来必然基错位、出重影（`OutlinedText` 试了 4 版没洗干净，已删除）。
+   要描边就单层 + `Shadow(offset = Zero, blurRadius)`，即 `ui/HaloText.kt`。
+ —— tag 建了之后如果再改代码重推 tag，
    旧 Release 已经占位。要么先删 Release，要么直接升版本号
 
 ---
