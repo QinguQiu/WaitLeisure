@@ -19,6 +19,7 @@ import androidx.activity.compose.BackHandler
 import androidx.activity.compose.setContent
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
+import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.detectVerticalDragGestures
 import androidx.compose.foundation.layout.Arrangement
@@ -788,25 +789,88 @@ private fun WhitelistSection(
             fontSize = 12.sp
         )
         Spacer(Modifier.height(14.dp))
-        // 按用户排过的顺序显示；没排过的按字母序排在后面
-        val ordered = remember(packages) { Repos.whitelist.sortBySavedOrder(packages) }
-        val gridState = rememberLazyGridState()
-        val dragState = rememberGridDragDropState(gridState) { from, to ->
-            Repos.whitelist.moveInList(ordered, from, to)
+
+        // 顺序放在可变列表里：拖动时先改内存（立刻重排），再由 prefs 落盘。
+        // 只在 remember 里算一次是不够的 —— 那样拖完画面不会动。
+        val items = remember(packages) {
+            mutableStateListOf<String>().apply {
+                addAll(Repos.whitelist.sortBySavedOrder(packages))
+            }
         }
-        LazyVerticalGrid(
-            state = gridState,
-            columns = GridCells.Fixed(4),
-            contentPadding = PaddingValues(bottom = 8.dp),
-            horizontalArrangement = Arrangement.spacedBy(10.dp),
-            verticalArrangement = Arrangement.spacedBy(16.dp),
-            modifier = Modifier
-                .fillMaxWidth()
-                .gridDragContainer(dragState)
-        ) {
-            itemsIndexed(ordered, key = { _, pkg -> pkg }) { index, pkg ->
-                Box(Modifier.gridDraggableItem(dragState, index)) {
-                    AppEntry(packageName = pkg, onClick = { onLaunch(pkg) })
+        val gridState = rememberLazyGridState()
+        val density = LocalDensity.current
+
+        // 删除区高度（dp → px）。拖动时它就浮在网格上方那条。
+        val deleteZoneHeight = with(density) { 76.dp.toPx() }
+
+        val dragState = rememberGridDragDropState(
+            gridState = gridState,
+            onMove = { from, to ->
+                if (from in items.indices && to in items.indices && from != to) {
+                    items.add(to, items.removeAt(from))
+                    Repos.whitelist.saveOrder(items.toList())
+                }
+            },
+            onDrop = { index, overDelete ->
+                if (overDelete && index in items.indices) {
+                    val pkg = items[index]
+                    items.removeAt(index)
+                    // 先落顺序再删，否则 Set 里已经没它、顺序里还留着
+                    Repos.whitelist.saveOrder(items.toList())
+                    Repos.whitelist.remove(pkg)
+                    DiagLog.add("白名单", "锁机页拖入删除区：$pkg")
+                }
+            }
+        )
+
+        // 告诉拖动组件"这条线以上算删除区"
+        dragState.deleteZoneBottom = gridState.layoutInfo.viewportStartOffset + deleteZoneHeight
+
+        Box(Modifier.fillMaxWidth()) {
+            LazyVerticalGrid(
+                state = gridState,
+                columns = GridCells.Fixed(4),
+                contentPadding = PaddingValues(top = 8.dp, bottom = 8.dp),
+                horizontalArrangement = Arrangement.spacedBy(10.dp),
+                verticalArrangement = Arrangement.spacedBy(16.dp),
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .gridDragContainer(dragState)
+            ) {
+                itemsIndexed(items, key = { _, pkg -> pkg }) { index, pkg ->
+                    Box(Modifier.gridDraggableItem(dragState, index)) {
+                        AppEntry(packageName = pkg, onClick = { onLaunch(pkg) })
+                    }
+                }
+            }
+
+            // 删除区：只在长按拖动时浮出来，不拖的时候完全不占视线
+            if (dragState.draggingIndex != null) {
+                Box(
+                    modifier = Modifier
+                        .align(Alignment.TopCenter)
+                        .fillMaxWidth()
+                        .height(with(density) { deleteZoneHeight.toDp() })
+                        .clip(RoundedCornerShape(14.dp))
+                        .background(
+                            if (dragState.overDeleteZone) {
+                                Color(0xFFD32F2F).copy(alpha = 0.92f)
+                            } else {
+                                Color(0xFF2A2A2A).copy(alpha = 0.82f)
+                            }
+                        ),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Text(
+                        text = if (dragState.overDeleteZone) {
+                            "松手删除"
+                        } else {
+                            "拖到这里删除"
+                        },
+                        color = Color.White,
+                        fontSize = 13.sp,
+                        fontWeight = FontWeight.Medium
+                    )
                 }
             }
         }

@@ -73,6 +73,11 @@ class WhitelistRepository(private val prefs: AppPrefs) {
         prefs.whitelistDisplayOrder = next.joinToString("\n".toString())
     }
 
+    /** 直接把给定的顺序存下来（锁机页拖动时用，列表已经在内存里改好了）。 */
+    fun saveOrder(list: List<String>) {
+        prefs.whitelistDisplayOrder = list.joinToString("\n")
+    }
+
     fun move(from: Int, to: Int) {
         val list = ordered().toMutableList()
         if (from !in list.indices || to !in list.indices || from == to) return

@@ -25,26 +25,36 @@ import kotlinx.coroutines.CoroutineScope
  * 而是**用被拖条目的中心点**去撞其它条目 —— 中心进了谁的范围就跟谁换。
  * 这样手指在格子缝隙里移动时也不会卡住。
  *
+ * ## 拖到顶部删除
+ *
+ * 网格上方可以留一条"删除区"（[deleteZoneBottom]）。指针进到那条区域内时
+ * [overDeleteZone] 变 true，松手就调 [onDrop] 并带上 `overDelete = true`，
+ * 由调用方决定删不删 —— 组件本身不碰数据。
+ *
  * ## 用法
  * ```
- * val dragState = rememberGridDragDropState(gridState) { from, to -> repo.move(from, to) }
- * LazyVerticalGrid(
- *     state = gridState,
- *     modifier = Modifier.gridDragContainer(dragState)
- * ) {
+ * val dragState = rememberGridDragDropState(
+ *     gridState = gridState,
+ *     onMove = { from, to -> ... },
+ *     onDrop = { index, overDelete -> if (overDelete) delete(index) }
+ * )
+ * val layout = gridState.layoutInfo
+ * dragState.deleteZoneBottom = layout.viewportStartOffset + 96.dp.toPx()
+ *
+ * LazyVerticalGrid(state = gridState, modifier = Modifier.gridDragContainer(dragState)) {
  *     itemsIndexed(items, key = { _, it -> it }) { index, item ->
  *         Box(Modifier.gridDraggableItem(dragState, index)) { ... }
  *     }
  * }
  * ```
  *
- * 和竖列表版一样：**必须用 itemsIndexed**，且前面不能有非数据 item
- * （有的话要自己在下标上减掉，参照 [DragDropState] 的 headerCount）。
+ * 和竖列表版一样：**必须用 itemsIndexed**，且前面不能有非数据 item。
  */
 class GridDragDropState(
     private val gridState: LazyGridState,
     private val scope: CoroutineScope,
-    private val onMove: (from: Int, to: Int) -> Unit
+    private val onMove: (from: Int, to: Int) -> Unit,
+    private val onDrop: (index: Int, overDelete: Boolean) -> Unit
 ) {
     var draggingIndex by mutableStateOf<Int?>(null)
         private set
@@ -52,6 +62,18 @@ class GridDragDropState(
     /** 拖动中的二维位移，渲染时用 graphicsLayer 平移。 */
     var draggingOffset by mutableStateOf(Offset.Zero)
         private set
+
+    /**
+     * 指针是否落在顶部删除区里。
+     *
+     * 删除区的高度由调用方设置 —— 组件不知道 UI 长什么样，
+     * 只知道"这条线以上算删除区"。
+     */
+    var overDeleteZone by mutableStateOf(false)
+        private set
+
+    /** 删除区的下边界（网格坐标系里的像素 Y）。<= 0 表示没有删除区。 */
+    var deleteZoneBottom: Float = 0f
 
     /** 按下点相对条目左上角的偏移 —— 绝对定位的基准。 */
     private var grabOffset = Offset.Zero
@@ -71,6 +93,7 @@ class GridDragDropState(
         val topLeft = Offset(item.offset.x.toFloat(), item.offset.y.toFloat())
         grabOffset = pos - topLeft
         draggingOffset = Offset.Zero
+        overDeleteZone = false
         draggingIndex = item.index
     }
 
@@ -78,16 +101,21 @@ class GridDragDropState(
         val current = draggingIndex ?: return
         val topLeft = topLeftOf(current) ?: return
 
-        // 条目左上角本该在的位置 = 指针 - 抓取偏移（绝对定位，不累加）
+        // 绝对定位：每帧都从指针位置反推，误差不会累积
         val targetTopLeft = pos - grabOffset
         draggingOffset = targetTopLeft - topLeft
 
-        val second = gridState.layoutInfo.visibleItemsInfo
+        // 指针进了删除区就只标状态，不再跟别的格子换位 ——
+        // 否则一边换位一边删除，松手时下标早就变了，容易删错东西。
+        val inDelete = deleteZoneBottom > 0f && pos.y < deleteZoneBottom
+        overDeleteZone = inDelete
+        if (inDelete) return
+
+        val self = gridState.layoutInfo.visibleItemsInfo
             .firstOrNull { it.index == current } ?: return
-        // 用中心点去撞，避免落到格子缝隙里判不出来
         val center = targetTopLeft + Offset(
-            second.size.width / 2f,
-            second.size.height / 2f
+            self.size.width / 2f,
+            self.size.height / 2f
         )
 
         val target = gridState.layoutInfo.visibleItemsInfo.firstOrNull { info ->
@@ -107,19 +135,24 @@ class GridDragDropState(
     }
 
     fun onDragEnd() {
+        val index = draggingIndex
+        val wasOverDelete = overDeleteZone
         draggingIndex = null
         draggingOffset = Offset.Zero
         grabOffset = Offset.Zero
+        overDeleteZone = false
+        if (index != null) onDrop(index, wasOverDelete)
     }
 }
 
 @Composable
 fun rememberGridDragDropState(
     gridState: LazyGridState,
-    onMove: (from: Int, to: Int) -> Unit
+    onMove: (from: Int, to: Int) -> Unit,
+    onDrop: (index: Int, overDelete: Boolean) -> Unit
 ): GridDragDropState {
     val scope = rememberCoroutineScope()
-    return remember(gridState) { GridDragDropState(gridState, scope, onMove) }
+    return remember(gridState) { GridDragDropState(gridState, scope, onMove, onDrop) }
 }
 
 /** 挂在 LazyVerticalGrid 上，识别长按拖动。 */
@@ -142,6 +175,11 @@ fun Modifier.gridDraggableItem(gridDrop: GridDragDropState, index: Int): Modifie
         .zIndex(if (gridDrop.draggingIndex == index) 1f else 0f)
         .graphicsLayer {
             if (gridDrop.draggingIndex == index) {
+                // 拖到删除区时缩小一点，暗示"要没了"
+                val scale = if (gridDrop.overDeleteZone) 0.7f else 1f
+                scaleX = scale
+                scaleY = scale
+                alpha = if (gridDrop.overDeleteZone) 0.5f else 1f
                 translationX = gridDrop.draggingOffset.x
                 translationY = gridDrop.draggingOffset.y
             }
