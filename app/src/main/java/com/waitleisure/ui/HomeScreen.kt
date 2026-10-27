@@ -210,6 +210,10 @@ fun HomeScreen(onOpenPermissions: () -> Unit) {
             // 休息时点卡片还会开选择框，等于变相允许改设置，一起堵掉。
             val pomoNow = Pomodoro.current()
             val isBreak = pomoNow?.second == "break"
+            // 暂停中状态串是空的，只能看这个标记
+            val pomoPaused = Pomodoro.isPaused()
+            // 非严格模式（允许解锁）才给暂停键 —— 严格模式下休息不该被打断
+            val canPause = Repos.prefs.effectiveAllowPinUnlock
             Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
                 ActionCard(
                     title = "简单锁机", glyph = "⏳",
@@ -221,7 +225,12 @@ fun HomeScreen(onOpenPermissions: () -> Unit) {
                     title = if (isBreak) "休息中" else "番茄钟进行中",
                     glyph = "🍅",
                     taskName = Pomodoro.describe(Pomodoro.activeConfig()),
-                    taskDetail = if (isBreak) "休息阶段不能停止" else "点此停止",
+                    taskDetail = when {
+                        isBreak && pomoPaused -> "点此继续"
+                        isBreak && canPause -> "点此暂停 · 长按停止"
+                        isBreak -> "休息阶段不能停止"
+                        else -> "点此停止"
+                    },
                     modifier = Modifier.weight(1f),
                     onClick = {
                         // 休息阶段完全不响应点击

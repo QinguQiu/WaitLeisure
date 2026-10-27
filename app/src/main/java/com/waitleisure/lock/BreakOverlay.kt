@@ -131,7 +131,11 @@ object BreakOverlay {
                                 //   END   时是「距右边缘」→ 往右拖要减
                                 //   START 时是「距左边缘」→ 往右拖要加
                                 // 不区分的话，吸附到左边之后拖动方向就是反的（用户实测）。
-                                val rightAnchored = params.gravity and Gravity.END != 0
+                                // 不能用 gravity and Gravity.END != 0 判断：START(0x03) 和 END(0x05)
+                                // 按位与不为 0（0x03 and 0x05 = 0x01），贴左时会被判成靠右，
+                                // 拖动方向就反了。要用水平方向掩码取出来再比。
+                                val horizontal = params.gravity and Gravity.HORIZONTAL_GRAVITY_MASK
+                                val rightAnchored = horizontal == Gravity.END || horizontal == Gravity.RIGHT
                                 params.x += if (rightAnchored) -dx.toInt() else dx.toInt()
                                 params.y = (params.y + dy.toInt()).coerceAtLeast(0)
                                 runCatching { wm.updateViewLayout(view, params) }
@@ -141,7 +145,8 @@ object BreakOverlay {
                                 // 距离一律按「距最近那条边」算，切换 gravity 时不会跳。
                                 val screenW = context.resources.displayMetrics.widthPixels
                                 val w = view.width.coerceAtLeast(1)
-                                val leftOffset = if (params.gravity and Gravity.END != 0) {
+                                val hMask = params.gravity and Gravity.HORIZONTAL_GRAVITY_MASK
+                                val leftOffset = if (hMask == Gravity.END || hMask == Gravity.RIGHT) {
                                     screenW - params.x - w
                                 } else {
                                     params.x

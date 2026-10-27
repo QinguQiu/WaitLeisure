@@ -70,7 +70,8 @@ object Pomodoro {
     fun activeConfig(): String =
         Repos.prefs.pomodoroRunConfig.ifEmpty { Repos.prefs.pomodoroConfig }
 
-    fun isActive(): Boolean = Repos.prefs.pomodoroState.isNotEmpty()
+    fun isActive(): Boolean =
+        Repos.prefs.pomodoroState.isNotEmpty() || Repos.prefs.pomodoroPausedRemaining > 0L
 
     /** 当前相位：(组序号, 相位, 相位结束时刻)；未运行返回 null。 */
     fun current(): Triple<Int, String, Long>? {
@@ -116,7 +117,15 @@ object Pomodoro {
         val c = parse(activeConfig())
         val now = System.currentTimeMillis()
         // 起算点：有窗口起点就用它，但不能比"现在"还晚（未来时间没意义）
-        val base = startAtMillis?.coerceAtMost(now) ?: now
+        // 补算要「按起点算」，但不能算到第一个专注阶段已经整个过去。
+        // 否则 state 一写下去 end 就是过去时刻，第一次 tick 立刻判到期，
+        // 直接跳进休息 —— 表现为「定时开的番茄钟一上来就在休息」（用户实测）。
+        // 这里把补算量限制在「专注时长 - 1 分钟」，保证至少还剩 1 分钟专注。
+        val maxCatchUp = (c.focusMinutes * 60_000L) - 60_000L
+        val base = startAtMillis?.let { raw ->
+            val floor = now - maxCatchUp.coerceAtLeast(0L)
+            raw.coerceAtMost(now).coerceAtLeast(floor)
+        } ?: now
         val end = base + c.focusMinutes * 60_000L
         Repos.prefs.pomodoroState = "1,focus,$end"
         DiagLog.add(
@@ -136,6 +145,46 @@ object Pomodoro {
         )
     }
 
+    /** 现在是不是暂停中。 */
+    fun isPaused(): Boolean = Repos.prefs.pomodoroPausedRemaining > 0L
+
+    /**
+     * 暂停：记住还剩多久，把状态串清掉（这样 tick 不会推进相位）。
+     *
+     * 只允许在**休息阶段**暂停 —— 专注阶段是锁着机的，
+     * 能点到暂停说明已经解锁了，那本来就是休息。
+     */
+    fun pause(context: Context): Boolean {
+        val cur = current() ?: return false
+        if (isPaused()) return true
+        val remaining = (cur.third - System.currentTimeMillis()).coerceAtLeast(0L)
+        Repos.prefs.pomodoroPausedRemaining = remaining
+        pausedRound = cur.first
+        Repos.prefs.pomodoroState = ""
+        DiagLog.add("番茄", "已暂停，剩余 ${remaining / 1000} 秒")
+        BreakOverlay.hide()
+        return true
+    }
+
+    /** 继续：按剩余时间重新写回状态串。 */
+    fun resume(context: Context) {
+        val remaining = Repos.prefs.pomodoroPausedRemaining
+        if (remaining <= 0L) return
+        val end = System.currentTimeMillis() + remaining
+        // 暂停只发生在休息阶段，所以恢复成 break；round 取当时那轮
+        Repos.prefs.pomodoroState = "${pausedRound},break,$end"
+        Repos.prefs.pomodoroPausedRemaining = 0L
+        DiagLog.add("番茄", "已继续，休息还剩 ${remaining / 1000} 秒")
+        BreakOverlay.resetDismissed()
+        BreakOverlay.show(context, end)
+    }
+
+    /** 暂停时的轮次（存进 prefs，恢复时用）。 */
+    private var pausedRound: Int
+        get() = Repos.prefs.pomodoroPausedRound
+        set(value) { Repos.prefs.pomodoroPausedRound = value }
+
+    /** 手动停止（用户主动中断）。 */
     /** 手动停止（用户主动中断）。 */
     fun stop(context: Context) {
         Repos.prefs.pomodoroState = ""

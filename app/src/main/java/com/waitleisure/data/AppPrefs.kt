@@ -205,6 +205,22 @@ class AppPrefs(context: Context) {
      * 番茄钟运行状态。空串 = 未运行；否则为 "组序号,相位,相位结束时刻"，
      * 例如 "2,focus,1791900000000"。相位取 focus / break。
      */
+    /**
+     * 番茄钟暂停时剩余的毫秒数；0 = 没暂停。
+     *
+     * 单独放一个字段而不是塞进 pomodoroState：状态串的格式
+     * （round,phase,end）已经被 tick / 锁机页 / 胶囊多处解析，
+     * 加字段等于全改一遍，风险不值当。
+     */
+    var pomodoroPausedRemaining: Long
+        get() = sp.getLong(KEY_POMO_PAUSED, 0L)
+        set(value) = sp.edit().putLong(KEY_POMO_PAUSED, value).apply()
+
+    /** 暂停时在第几个番茄（恢复时写回状态串用）。 */
+    var pomodoroPausedRound: Int
+        get() = sp.getInt(KEY_POMO_PAUSED_ROUND, 1)
+        set(value) = sp.edit().putInt(KEY_POMO_PAUSED_ROUND, value).apply()
+
     var pomodoroState: String
         get() = sp.getString(KEY_POMODORO_STATE, "") ?: ""
         set(value) = sp.edit().putString(KEY_POMODORO_STATE, value).apply()
@@ -245,6 +261,8 @@ class AppPrefs(context: Context) {
     const val KEY_ACTIVE_GROUP = "active_whitelist_group"
     const val KEY_ACTIVE_TASK_NAME = "active_task_name"
     const val KEY_ACTIVE_ALLOW_PIN = "active_allow_pin_unlock"
+    const val KEY_POMO_PAUSED = "pomodoro_paused_remaining"
+    const val KEY_POMO_PAUSED_ROUND = "pomodoro_paused_round"
     const val KEY_WHITELIST_ORDER = "whitelist_display_order"
     const val KEY_LAST_SIMPLE_TASK = "last_simple_task"
     const val KEY_LAST_POMODORO_TASK = "last_pomodoro_task"
