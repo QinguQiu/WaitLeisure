@@ -33,7 +33,15 @@ object ScheduleRunner {
         context: Context,
         schedule: Schedule,
         now: Long = System.currentTimeMillis(),
-        windowStartMillis: Long? = null
+        windowStartMillis: Long? = null,
+        /**
+         * 本次窗口的**终点**。
+         *
+         * 锁到这一刻，而不是「现在 + 时长」—— 否则规则晚几分钟执行，
+         * 结束时刻就跟着推迟几分钟（用户实测：12:27 的规则 12:37 才执行，
+         * 结果 13:37 才解锁，而规则写的是 13:27）。
+         */
+        windowEndMillis: Long? = null
     ): Long? {
         val groupId = schedule.whitelistGroupId
         val task = if (schedule.usesTask) Repos.tasks.byId(schedule.taskId) else null
@@ -45,7 +53,8 @@ object ScheduleRunner {
         if (task != null) {
             return when (task.kind) {
                 TaskKind.SIMPLE_LOCK -> {
-                    val end = now + task.durationMinutes * 60_000L
+                    // 有窗口终点就锁到终点，保证按规则写的时间解锁
+                    val end = windowEndMillis ?: (now + task.durationMinutes * 60_000L)
                     DiagLog.add("规则", "执行任务「${task.name}」：锁到 " + fmt(end))
                     LockController.lock(context, end, schedule.id, groupId, taskName = task.name, strictMode = schedule.strictMode)
                     end
@@ -68,7 +77,7 @@ object ScheduleRunner {
         }
 
         // 自带时长（也包含「任务被删了」的兜底）
-        val end = now + schedule.durationMinutes * 60_000L
+        val end = windowEndMillis ?: (now + schedule.durationMinutes * 60_000L)
         LockController.lock(context, end, schedule.id, groupId, strictMode = schedule.strictMode)
         return end
     }

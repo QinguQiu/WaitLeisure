@@ -5,6 +5,7 @@ import android.content.Context
 import android.content.Intent
 import com.waitleisure.data.Repos
 import com.waitleisure.lock.LockController
+import com.waitleisure.model.activeWindowEndMillis
 
 /**
  * 定时触发点。
@@ -30,7 +31,15 @@ class ScheduleAlarmReceiver : BroadcastReceiver() {
 
         if (schedule != null && schedule.enabled) {
             // 锁什么由 ScheduleRunner 决定：可能是自带时长，也可能是执行某个任务
-            val endAt = ScheduleRunner.execute(context, schedule)
+            // 闹钟也可能被系统延迟，所以同样按「窗口终点」算，保证准时解锁
+            val windowEnd = schedule.activeWindowEndMillis(
+                now = System.currentTimeMillis(),
+                zone = java.time.ZoneId.systemDefault(),
+                durationOverride = if (schedule.usesTask) {
+                    Repos.tasks.byId(schedule.taskId)?.takeIf { it.kind == com.waitleisure.model.TaskKind.SIMPLE_LOCK }?.durationMinutes
+                } else null
+            )
+            val endAt = ScheduleRunner.execute(context, schedule, windowEndMillis = windowEnd)
 
             if (endAt != null) {
                 // 本次锁定的结束闹钟必须排上。
