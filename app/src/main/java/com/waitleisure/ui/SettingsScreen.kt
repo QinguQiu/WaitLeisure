@@ -58,6 +58,7 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.waitleisure.data.AppPrefs
+import com.waitleisure.util.DiagLog
 import com.waitleisure.data.SIGNATURE_MAX_LENGTH
 import com.waitleisure.data.Repos
 import com.waitleisure.data.WhitelistGroup
@@ -81,6 +82,7 @@ fun SettingsScreen(onOpenTasks: () -> Unit = {}) {
     var showPinDialog by remember { mutableStateOf(false) }
     var allowPinUnlock by remember { mutableStateOf(Repos.prefs.allowPinUnlock) }
     var showQuickEdit by remember { mutableStateOf(false) }
+    var showPomodoroConfig by remember { mutableStateOf(false) }
     var pinSet by remember { mutableStateOf(!Repos.prefs.pinHash.isNullOrEmpty()) }
 
     // 番茄钟**休息期间不许改设置**。
@@ -369,7 +371,38 @@ fun SettingsScreen(onOpenTasks: () -> Unit = {}) {
             OutlinedButton(onClick = onOpenTasks) { Text("管理任务…") }
         }
 
+        GroupHeader(
+            title = "番茄钟默认参数",
+            hint = "改的是「不选任务、直接开番茄钟」时用的那套"
+        )
+
+        SectionCard(
+            title = "默认参数",
+            subtitle = Pomodoro.describe(Repos.prefs.pomodoroConfig)
+        ) {
+            Text(
+                text = "任务是带任务名的那套配置，这里是不选任务时的默认值。\n" +
+                    "两者各自独立，改这里不会影响任何任务。",
+                fontSize = 12.sp,
+                lineHeight = 17.sp,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+            Spacer(Modifier.height(8.dp))
+            OutlinedButton(onClick = { showPomodoroConfig = true }) { Text("修改默认参数…") }
+        }
+
         Spacer(Modifier.height(8.dp))
+    }
+
+    if (showPomodoroConfig) {
+        PomodoroConfigDialog(
+            onDismiss = { showPomodoroConfig = false },
+            onSave = { cfg ->
+                Repos.prefs.pomodoroConfig = cfg
+                showPomodoroConfig = false
+                DiagLog.add("番茄", "默认参数改为 $cfg")
+            }
+        )
     }
 
     if (showPinDialog) {
