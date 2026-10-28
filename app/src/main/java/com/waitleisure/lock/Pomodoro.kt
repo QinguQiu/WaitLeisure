@@ -253,6 +253,9 @@ object Pomodoro {
     fun stop(context: Context) {
         Repos.prefs.pomodoroState = ""
         Repos.prefs.pomodoroRunConfig = ""
+        // 暂停标记也必须清 —— 否则 isActive() 永远为 true，
+        // 首页那块会一直显示「进行中 + 点此结束」，明明已经退出了（用户实测）。
+        Repos.prefs.pomodoroPausedRemaining = 0L
         DiagLog.add("番茄", "已手动停止")
         BreakOverlay.reset(context)
         LockController.unlock(context)
