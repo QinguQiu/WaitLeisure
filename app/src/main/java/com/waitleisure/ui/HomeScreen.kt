@@ -245,26 +245,21 @@ fun HomeScreen(onOpenPermissions: () -> Unit) {
                     glyph = "🍅",
                     taskName = Pomodoro.describe(Pomodoro.activeConfig()),
                     taskDetail = when {
-                        isBreak && pomoPaused -> "点此继续"
-                        isBreak && canPause -> "点此暂停" + (remainText?.let { " · " + it } ?: "")
+                        // 非严格模式下休息期可以直接结束整个番茄钟
+                        isBreak && canPause -> "点此结束番茄钟" + (remainText?.let { " · 还剩 " + it } ?: "")
                         isBreak -> "休息阶段不能停止" + (remainText?.let { " · " + it } ?: "")
                         else -> "点此停止"
                     },
                     modifier = Modifier.weight(1f),
                     onClick = {
                         when {
-                            // 休息 + 非严格 + 还没暂停 → 暂停倒计时
-                            isBreak && !pomoPaused && canPause -> {
-                                Pomodoro.pause(context)
-                                refreshKey++
-                            }
-                            // 休息 + 已暂停 → 继续
-                            isBreak && pomoPaused -> {
-                                Pomodoro.resume(context)
-                                refreshKey++
-                            }
-                            // 专注阶段才能「停止」（这一轮番茄作废）
+                            // 专注阶段：这一轮番茄作废
                             !isBreak -> {
+                                Pomodoro.stop(context)
+                                refreshKey++
+                            }
+                            // 休息期 + 非严格：直接结束整个番茄钟（不用等剩余休息走完）
+                            isBreak && canPause -> {
                                 Pomodoro.stop(context)
                                 refreshKey++
                             }
