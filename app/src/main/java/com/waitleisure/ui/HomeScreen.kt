@@ -101,8 +101,20 @@ fun HomeScreen(onOpenPermissions: () -> Unit) {
     // 配合 AppNavHost 的 when 切换 —— 每次回到首页都会重新进入组合，效果等价。
     var refreshKey by remember { mutableIntStateOf(0) }
     var copied by remember { mutableStateOf(false) }
-    // 番茄钟状态存在 prefs 里而不是 StateFlow，所以靠 refreshKey 驱动重算
-    val pomodoroActive = Pomodoro.isActive()
+    // 番茄钟状态存在 prefs 里而不是 StateFlow，没法被 Compose 自动观察 ——
+    // 所以这里自己开一个每秒的 ticker：番茄钟在跑的时候每秒重组一次。
+    //
+    // 为什么必须要它：休息/专注的切换是前台服务在后台做的，首页根本不知道；
+    // 之前只靠 refreshKey（点击时 +1）驱动，用户点「暂停」后没人读这个值，
+    // 界面一次都不重组 —— 看着就是「点了没反应 / 无法暂停」（用户实测）。
+    var pomoTick by remember { mutableIntStateOf(0) }
+    LaunchedEffect(Unit) {
+        while (true) {
+            if (Pomodoro.isActive()) pomoTick++
+            kotlinx.coroutines.delay(1000L)
+        }
+    }
+    val pomodoroActive = remember(refreshKey, pomoTick) { Pomodoro.isActive() }
     LaunchedEffect(Unit) {
         Repos.lockState.refresh()
     }
@@ -208,12 +220,18 @@ fun HomeScreen(onOpenPermissions: () -> Unit) {
             // 休息阶段不给「点此停止」——休息本来就是放松时间，
             // 但「停止」意味着这次番茄彻底作废，只该在专注阶段由用户主动放弃。
             // 休息时点卡片还会开选择框，等于变相允许改设置，一起堵掉。
-            val pomoNow = Pomodoro.current()
+            val pomoNow = remember(refreshKey, pomoTick) { Pomodoro.current() }
             val isBreak = pomoNow?.second == "break"
             // 暂停中状态串是空的，只能看这个标记
-            val pomoPaused = Pomodoro.isPaused()
+            val pomoPaused = remember(refreshKey, pomoTick) { Pomodoro.isPaused() }
             // 非严格模式（允许解锁）才给暂停键 —— 严格模式下休息不该被打断
             val canPause = Repos.prefs.effectiveAllowPinUnlock
+            // 剩余时间也一起显示出来，点了暂停能立刻看到数字冻住
+            val remainText = pomoNow?.let { it.third - System.currentTimeMillis() }
+                ?.coerceAtLeast(0L)?.let { ms ->
+                    val s = (ms / 1000).toInt()
+                    "%d:%02d".format(s / 60, s % 60)
+                }
             Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
                 ActionCard(
                     title = "简单锁机", glyph = "⏳",
@@ -227,8 +245,8 @@ fun HomeScreen(onOpenPermissions: () -> Unit) {
                     taskName = Pomodoro.describe(Pomodoro.activeConfig()),
                     taskDetail = when {
                         isBreak && pomoPaused -> "点此继续"
-                        isBreak && canPause -> "点此暂停 · 长按停止"
-                        isBreak -> "休息阶段不能停止"
+                        isBreak && canPause -> "点此暂停" + (remainText?.let { " · " + it } ?: "")
+                        isBreak -> "休息阶段不能停止" + (remainText?.let { " · " + it } ?: "")
                         else -> "点此停止"
                     },
                     modifier = Modifier.weight(1f),
