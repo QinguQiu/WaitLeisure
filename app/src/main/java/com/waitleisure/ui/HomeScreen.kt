@@ -135,7 +135,23 @@ fun HomeScreen(onOpenPermissions: () -> Unit) {
         onDispose { lifecycleOwner.lifecycle.removeObserver(observer) }
     }
 
-    val perms = remember(refreshKey) { PermissionSnapshot.of(context) }
+    // 冷启动时无障碍服务往往还没被系统真正绑上，这时算出来的体检结果是 6/7；
+    // 过一会儿绑好了却没人重算，首页就一直挂着 6/7 —— 用户点进权限页再回来才变"已就绪"（实测）。
+    // 所以启动后前几秒多查几次，绑上就自动更新。
+    var permTick by remember { mutableIntStateOf(0) }
+    val perms0 = remember(refreshKey) { PermissionSnapshot.of(context) }
+    LaunchedEffect(Unit, refreshKey) {
+        // MIUI 冷启动后无障碍服务要 20 秒左右才真正绑上，所以一直重查到配齐为止。
+        // 之前只重试 8 秒，8 秒后停在 6/7 就再也不动了 ——
+        // 用户点进权限页（那时已经过了 20 秒）才发现"已经 7/7 了"（实测）。
+        var tries = 0
+        while (tries < 40 && !PermissionSnapshot.of(context).allOk) {
+            kotlinx.coroutines.delay(1000L)
+            tries++
+            permTick++
+        }
+    }
+    val perms = remember(refreshKey, permTick) { PermissionSnapshot.of(context) }
     var showSimplePicker by remember { mutableStateOf(false) }
     var showPomodoroPicker by remember { mutableStateOf(false) }
     // 简单锁机选择框里的「自定义时长…」兜底入口
