@@ -68,6 +68,12 @@ object CoreAllowed {
             //   · 长按电源弹不出关机菜单
             //   · 调音量看不到音量条
             // 它们都是系统组件，放行不会让用户借道绕过锁机。
+            // HyperOS 把状态栏 / 控制中心拆成了**独立插件进程**，包名不叫
+            // com.android.systemui —— 不放行的话，用白名单应用时插件一冒窗口
+            // 就会被当成"非白名单应用"，遮罩闪一下（用户实测「偶尔弹出锁机页」）。
+            "miui.systemui.plugin",
+            "com.miui.systemui",
+            "miui.systemui.controlcenter",
             "com.miui.screenshot",
             "com.android.systemui.screenshot",
             "com.miui.securityadd",
@@ -88,8 +94,23 @@ object CoreAllowed {
         return set
     }
 
-    fun contains(context: Context, packageName: String): Boolean =
-        packageName in packages(context)
+    /**
+     * 前缀族：HyperOS 的系统 UI 插件包名会变
+     * （miui.systemui.plugin / miui.systemui.controlcenter / com.miui.systemui …）。
+     *
+     * 逐个枚举容易漏 —— 实测漏了 `miui.systemui.plugin`，结果用白名单应用时
+     * 状态栏插件一冒窗口就被判成"非白名单"，遮罩闪一下（用户反馈「偶尔弹出锁机页」）。
+     * 这些全是系统组件，用户没法拿它们绕过锁机，整族放行。
+     */
+    private val SYSTEM_UI_PREFIXES = listOf(
+        "miui.systemui",
+        "com.miui.systemui"
+    )
+
+    fun contains(context: Context, packageName: String): Boolean {
+        if (packageName in packages(context)) return true
+        return SYSTEM_UI_PREFIXES.any { packageName.startsWith(it) }
+    }
 
     /** 当前默认输入法。 */
     private fun currentImePackage(context: Context): String? = runCatching {
