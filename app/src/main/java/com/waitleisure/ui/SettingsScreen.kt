@@ -93,13 +93,13 @@ fun SettingsScreen(onOpenTasks: () -> Unit = {}) {
     // 所以在入口整页挡掉。
     //
     // 任务编辑页、定时编辑页都是从设置进去的，挡住这里等于一起挡住。
-    if (Pomodoro.current()?.second == "break") {
+    if (Pomodoro.current()?.second == "break" && !Repos.prefs.effectiveAllowPinUnlock) {
         Box(
             modifier = Modifier.fillMaxSize().padding(32.dp),
             contentAlignment = Alignment.Center
         ) {
             Text(
-                text = "番茄钟休息中\n\n休息结束前不能修改设置",
+                text = "番茄钟休息中（严格模式）\n\n严格模式下休息结束前不能修改设置",
                 fontSize = 15.sp,
                 lineHeight = 24.sp,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
