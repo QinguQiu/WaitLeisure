@@ -74,6 +74,15 @@ class AppPrefs(context: Context) {
             else -> allowPinUnlock
         }
 
+    /**
+     * 开发者模式。打开后锁机页会多一个「跳到休息」按钮（仅番茄钟专注阶段）。
+     *
+     * 纯粹为了调试相位推进用 —— 否则验证一次休息要等满一个专注时长。
+     */
+    var developerMode: Boolean
+        get() = sp.getBoolean(KEY_DEV_MODE, false)
+        set(value) = sp.edit().putBoolean(KEY_DEV_MODE, value).apply()
+
     var allowPinUnlock: Boolean
         get() = sp.getBoolean(KEY_ALLOW_PIN_UNLOCK, true)
         set(value) = sp.edit().putBoolean(KEY_ALLOW_PIN_UNLOCK, value).apply()
@@ -261,6 +270,7 @@ class AppPrefs(context: Context) {
     const val KEY_ACTIVE_GROUP = "active_whitelist_group"
     const val KEY_ACTIVE_TASK_NAME = "active_task_name"
     const val KEY_ACTIVE_ALLOW_PIN = "active_allow_pin_unlock"
+    const val KEY_DEV_MODE = "developer_mode"
     const val KEY_POMO_PAUSED = "pomodoro_paused_remaining"
     const val KEY_POMO_PAUSED_ROUND = "pomodoro_paused_round"
     const val KEY_WHITELIST_ORDER = "whitelist_display_order"

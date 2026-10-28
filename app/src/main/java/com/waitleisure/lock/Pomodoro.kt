@@ -185,6 +185,30 @@ object Pomodoro {
         }
     }
 
+    /**
+     * 【调试】把当前专注阶段直接结束、跳到它后面的休息。
+     *
+     * 只在专注阶段有效。休息长度按正常规则算（长休/短休）。
+     * 走的是和 tick() 里"专注自然结束"完全一样的写入方式，
+     * 所以后续相位推进不受影响。
+     */
+    fun skipToBreak(context: Context): Boolean {
+        val cur = current() ?: return false
+        val (round, phase, _) = cur
+        if (phase != "focus") return false
+        val c = parse(activeConfig())
+        if (round >= c.rounds) return false
+        val isLong = round % c.roundsPerSet == 0
+        val mins = if (isLong) c.longBreak else c.shortBreak
+        val now = System.currentTimeMillis()
+        Repos.prefs.pomodoroState = "$round,break," + (now + mins * 60_000L)
+        Repos.lockState.unlock()
+        DiagLog.add("番茄", "【调试】跳到第 $round 个番茄后的${if (isLong) "长" else "短"}休息 $mins 分")
+        BreakOverlay.resetDismissed()
+        BreakOverlay.show(context, now + mins * 60_000L)
+        return true
+    }
+
     /** 现在是不是暂停中。 */
     fun isPaused(): Boolean = Repos.prefs.pomodoroPausedRemaining > 0L
 

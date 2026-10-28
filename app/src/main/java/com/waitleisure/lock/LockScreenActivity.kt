@@ -384,7 +384,7 @@ private fun LockScreen(
             modifier = Modifier.fillMaxSize()
         ) { page ->
             when (page) {
-                0 -> TimePage(now)
+                0 -> TimePage(now) { /* 状态靠 now 每秒刷新，这里不需要额外动作 */ }
                 1 -> AppsPage(whitelist = whitelist, onLaunchApp = onLaunchApp)
                 else -> ExitPage(now = now, onUnlock = { showPinDialog = true })
             }
@@ -606,7 +606,8 @@ private fun rememberNetworkLabel(now: Long): String {
 
 /** 第一页：时间 + 倒计时。背景保持清晰。 */
 @Composable
-private fun TimePage(now: Long) {
+private fun TimePage(now: Long, onRequestRefresh: () -> Unit) {
+    val context = androidx.compose.ui.platform.LocalContext.current
         Column(
         modifier = Modifier
             .fillMaxSize()
@@ -692,6 +693,30 @@ private fun TimePage(now: Long) {
                 color = Color(0xFFFFB74D),
                 fontSize = 15.6.sp
             )
+        }
+
+        // ---- 开发者模式：调试用的「跳到休息」----
+        //
+        // 只有开了开发者模式、且当前确实在番茄钟的**专注**阶段才出现。
+        // 走的是 Pomodoro.skipToBreak()，写入方式和专注自然结束一模一样，
+        // 所以后面几段相位推进和平常没有区别。
+        if (Repos.prefs.developerMode && pomo != null && pomo.second == "focus") {
+            Spacer(Modifier.height(16.dp))
+            TextButton(
+                onClick = {
+                    val ctx = context
+                    if (Pomodoro.skipToBreak(ctx)) {
+                        // 状态变了，让界面立刻重算一次
+                        onRequestRefresh()
+                    }
+                }
+            ) {
+                Text(
+                    text = "跳到休息（调试）",
+                    color = Color(0xFF80CBC4),
+                    fontSize = 14.sp
+                )
+            }
         }
     }
 }

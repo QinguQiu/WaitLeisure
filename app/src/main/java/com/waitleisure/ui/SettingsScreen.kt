@@ -83,6 +83,7 @@ fun SettingsScreen(onOpenTasks: () -> Unit = {}) {
     var allowPinUnlock by remember { mutableStateOf(Repos.prefs.allowPinUnlock) }
     var showQuickEdit by remember { mutableStateOf(false) }
     var showPomodoroConfig by remember { mutableStateOf(false) }
+    var devMode by remember { mutableStateOf(Repos.prefs.developerMode) }
     var pinSet by remember { mutableStateOf(!Repos.prefs.pinHash.isNullOrEmpty()) }
 
     // 番茄钟**休息期间不许改设置**。
@@ -389,6 +390,34 @@ fun SettingsScreen(onOpenTasks: () -> Unit = {}) {
             )
             Spacer(Modifier.height(8.dp))
             OutlinedButton(onClick = { showPomodoroConfig = true }) { Text("修改默认参数…") }
+        }
+
+        GroupHeader(
+            title = "开发者模式",
+            hint = "调试用，普通使用请保持关闭"
+        )
+
+        SectionCard(
+            title = "开发者模式",
+            subtitle = if (devMode) "已开启 —— 锁机页会多一个跳到休息的按钮" else "已关闭"
+        ) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Text("允许跳过番茄钟专注阶段", fontSize = 14.sp, modifier = Modifier.weight(1f))
+                Switch(checked = devMode, onCheckedChange = {
+                    devMode = it
+                    Repos.prefs.developerMode = it
+                })
+            }
+            Text(
+                text = "打开后，番茄钟专注阶段锁机页第一页底部会出现「跳到休息」按钮。" +
+                    "\\n仅用于调试相位推进，平时请关掉。",
+                fontSize = 11.sp,
+                lineHeight = 16.sp,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
         }
 
         Spacer(Modifier.height(8.dp))
