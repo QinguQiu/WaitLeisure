@@ -267,6 +267,8 @@ fun TaskEditScreen(taskId: Long, newKind: TaskKind, onDone: () -> Unit) {
                         onValueChange = { perSet = it.filter(Char::isDigit).take(2) },
                         singleLine = true,
                         label = { Text("几个番茄后长休息") },
+                        // 只有 2 个番茄时，第 2 个结束就收工，长休永远不会执行
+                        enabled = (rounds.toIntOrNull() ?: 0) > 2,
                         modifier = Modifier.weight(1f)
                     )
                 }
@@ -292,6 +294,7 @@ fun TaskEditScreen(taskId: Long, newKind: TaskKind, onDone: () -> Unit) {
                         onValueChange = { long = it.filter(Char::isDigit).take(3) },
                         singleLine = true,
                         label = { Text("长休息（分钟）") },
+                        enabled = (rounds.toIntOrNull() ?: 0) > 2,
                         modifier = Modifier.weight(1f)
                     )
                 }

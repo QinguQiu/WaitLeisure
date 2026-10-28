@@ -61,6 +61,19 @@ object CoreAllowed {
             "com.android.providers.media",
             "com.google.android.providers.media.module",
             "com.android.photopicker",
+            // ---- 系统常用 UI：截屏 / 长按电源 / 音量面板 ----
+            //
+            // 这些是系统自己的浮层，不属于任何"应用"。不豁免的话：
+            //   · 截屏后那个预览小窗会被遮罩盖住，图存不进相册
+            //   · 长按电源弹不出关机菜单
+            //   · 调音量看不到音量条
+            // 它们都是系统组件，放行不会让用户借道绕过锁机。
+            "com.miui.screenshot",
+            "com.android.systemui.screenshot",
+            "com.miui.securityadd",
+            "com.miui.powerkeeper",
+            "com.android.settings",
+
             // MIUI / HyperOS 自家的选图与文件选择
             "com.miui.gallery",
             "com.miui.gallery.picker",

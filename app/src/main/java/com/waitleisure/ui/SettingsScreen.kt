@@ -544,11 +544,18 @@ fun PomodoroConfigDialog(onDismiss: () -> Unit, onSave: (String) -> Unit) {
                         onValueChange = { perSet = it.filter(Char::isDigit).take(2) },
                         singleLine = true,
                         label = { Text("几个番茄后长休息") },
+                        // 只有 2 个番茄时，第 2 个结束就收工，长休永远不会执行
+                        enabled = (rounds.toIntOrNull() ?: 0) > 2,
                         modifier = Modifier.weight(1f)
                     )
                     OutlinedTextField(
                         value = rounds,
-                        onValueChange = { rounds = it.filter(Char::isDigit).take(2) },
+                        onValueChange = { input ->
+                            // 至少 2 个 —— 1 个番茄没有休息可言，
+                            // 2 个才是"一次专注 + 一次休息"的最小完整结构
+                            val v = input.filter(Char::isDigit).take(2)
+                            rounds = v
+                        },
                         singleLine = true,
                         label = { Text("番茄钟个数") },
                         modifier = Modifier.weight(1f)
@@ -575,6 +582,7 @@ fun PomodoroConfigDialog(onDismiss: () -> Unit, onSave: (String) -> Unit) {
                         onValueChange = { long = it.filter(Char::isDigit).take(3) },
                         singleLine = true,
                         label = { Text("长休息（分钟）") },
+                        enabled = (rounds.toIntOrNull() ?: 0) > 2,
                         modifier = Modifier.weight(1f)
                     )
                 }
