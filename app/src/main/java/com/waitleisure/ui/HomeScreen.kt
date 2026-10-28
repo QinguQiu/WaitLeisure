@@ -221,9 +221,10 @@ fun HomeScreen(onOpenPermissions: () -> Unit) {
             // 但「停止」意味着这次番茄彻底作废，只该在专注阶段由用户主动放弃。
             // 休息时点卡片还会开选择框，等于变相允许改设置，一起堵掉。
             val pomoNow = remember(refreshKey, pomoTick) { Pomodoro.current() }
-            val isBreak = pomoNow?.second == "break"
-            // 暂停中状态串是空的，只能看这个标记
             val pomoPaused = remember(refreshKey, pomoTick) { Pomodoro.isPaused() }
+            // 暂停时状态串被清空了，pomoNow 是 null —— 所以「暂停中」也必须算作休息态，
+            // 否则卡片会退回「番茄钟进行中 / 点此停止」，看着像暂停没生效。
+            val isBreak = pomoNow?.second == "break" || pomoPaused
             // 非严格模式（允许解锁）才给暂停键 —— 严格模式下休息不该被打断
             val canPause = Repos.prefs.effectiveAllowPinUnlock
             // 剩余时间也一起显示出来，点了暂停能立刻看到数字冻住
@@ -251,10 +252,24 @@ fun HomeScreen(onOpenPermissions: () -> Unit) {
                     },
                     modifier = Modifier.weight(1f),
                     onClick = {
-                        // 休息阶段完全不响应点击
-                        if (!isBreak) {
-                            Pomodoro.stop(context)
-                            refreshKey++
+                        when {
+                            // 休息 + 非严格 + 还没暂停 → 暂停倒计时
+                            isBreak && !pomoPaused && canPause -> {
+                                Pomodoro.pause(context)
+                                refreshKey++
+                            }
+                            // 休息 + 已暂停 → 继续
+                            isBreak && pomoPaused -> {
+                                Pomodoro.resume(context)
+                                refreshKey++
+                            }
+                            // 专注阶段才能「停止」（这一轮番茄作废）
+                            !isBreak -> {
+                                Pomodoro.stop(context)
+                                refreshKey++
+                            }
+                            // 严格模式的休息：什么也不做
+                            else -> Unit
                         }
                     }
                 )
