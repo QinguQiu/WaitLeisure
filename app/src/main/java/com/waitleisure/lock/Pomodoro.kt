@@ -116,33 +116,73 @@ object Pomodoro {
         Repos.prefs.pomodoroRunConfig = configOverride ?: ""
         val c = parse(activeConfig())
         val now = System.currentTimeMillis()
-        // 起算点：有窗口起点就用它，但不能比"现在"还晚（未来时间没意义）
-        // 补算要「按起点算」，但不能算到第一个专注阶段已经整个过去。
-        // 否则 state 一写下去 end 就是过去时刻，第一次 tick 立刻判到期，
-        // 直接跳进休息 —— 表现为「定时开的番茄钟一上来就在休息」（用户实测）。
-        // 这里把补算量限制在「专注时长 - 1 分钟」，保证至少还剩 1 分钟专注。
-        val maxCatchUp = (c.focusMinutes * 60_000L) - 60_000L
-        val base = startAtMillis?.let { raw ->
-            val floor = now - maxCatchUp.coerceAtLeast(0L)
-            raw.coerceAtMost(now).coerceAtLeast(floor)
-        } ?: now
-        val end = base + c.focusMinutes * 60_000L
-        Repos.prefs.pomodoroState = "1,focus,$end"
+
+        // ---- 补算：从窗口起点往后走，跳过已经整段过期的相位 ----
+        //
+        // 为什么不是「现在 + 专注时长」：定时规则晚几分钟执行时，整个番茄钟
+        // 就会顺着推迟几分钟，结束时刻和规则写的时间对不上（用户实测）。
+        //
+        // 为什么也不是「把补算量封顶」：封顶会让相位整体后移同样多，还是不准。
+        //
+        // 正解是沿着时间轴**逐相位前进**：已经整段过去的不进入，落在当前这一段上。
+        // 这样第 N 个番茄的起止始终钉在 窗口起点 + 前面各段之和 的位置。
+        val base = startAtMillis?.coerceAtMost(now) ?: now
+        var cursor = base
+        var round = 1
+        var isBreakPhase = false
+        var phaseEnd = cursor + c.focusMinutes * 60_000L
+
+        // 逐相位前进，停在"还没整段过去"的那一段上。
+        // 用 while 而不是 repeat：必须能**跳出**（repeat 里的 return@repeat 只是 continue，
+        // 会一路跑到底，把 round 推到很大，最后误判成"整轮已过"）。
+        // guard 只是防御性上限，配置再离谱也不至于循环上百次。
+        var guard = 0
+        while (phaseEnd <= now && guard < 500) {
+            guard++
+            cursor = phaseEnd
+            if (!isBreakPhase) {
+                // 专注结束 → 进入休息
+                val breakMins = if (round % c.roundsPerSet == 0) c.longBreak else c.shortBreak
+                isBreakPhase = true
+                phaseEnd = cursor + breakMins * 60_000L
+            } else {
+                // 休息结束 → 下一个番茄
+                round++
+                isBreakPhase = false
+                phaseEnd = cursor + c.focusMinutes * 60_000L
+            }
+        }
+
+        // 整个番茄钟都已经过去了 —— 不启动，让规则自然结束
+        if (round > c.rounds) {
+            DiagLog.add("番茄", "窗口起点在 ${(now - base) / 60_000} 分钟前，整轮已过，不启动")
+            return
+        }
+
+        Repos.prefs.pomodoroState = "$round,${if (isBreakPhase) "break" else "focus"},$phaseEnd"
         DiagLog.add(
             "番茄",
-            "开始：1/${c.rounds} 个番茄专注 ${c.focusMinutes} 分" +
+            "开始：第 $round/${c.rounds} 个，${if (isBreakPhase) "休息" else "专注"}到 " +
+                java.text.SimpleDateFormat("HH:mm", java.util.Locale.getDefault())
+                    .format(java.util.Date(phaseEnd)) +
                 if (base < now) "（按窗口起点补算，已过 ${(now - base) / 60_000} 分）" else ""
         )
-        // 给锁机一个"至少还能锁一会儿"的终点：如果补算下来这个相位已经结束，
-        // 交给 tick 去推进到下一个相位，这里不要用过去的时间点去 lock。
-        LockController.lock(
-            context,
-            maxOf(end, now + 60_000L),
-            scheduleId = -1L,
-            whitelistGroupId = whitelistGroupId,
-            taskName = taskName,
-            strictMode = strictMode
-        )
+
+        if (isBreakPhase) {
+            // 补算正好落在休息段：解锁，挂倒计时胶囊，等 tick 推进到下一个专注
+            Repos.lockState.unlock()
+            BreakOverlay.resetDismissed()
+            BreakOverlay.show(context, phaseEnd)
+        } else {
+            LockController.lock(
+                context,
+                phaseEnd,
+                scheduleId = -1L,
+                whitelistGroupId = whitelistGroupId,
+                taskName = taskName,
+                strictMode = strictMode
+            )
+        }
     }
 
     /** 现在是不是暂停中。 */
