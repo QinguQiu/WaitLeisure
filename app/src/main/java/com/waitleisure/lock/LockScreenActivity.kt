@@ -846,7 +846,7 @@ private fun WhitelistSection(
                     items.removeAt(index)
                     // 先落顺序再删，否则 Set 里已经没它、顺序里还留着
                     Repos.whitelist.saveOrder(items.toList())
-                    Repos.removeFromEffective(pkg)
+                    Repos.excludeForThisLock(pkg)
                     DiagLog.add("白名单", "锁机页拖入删除区：$pkg")
                 }
             }

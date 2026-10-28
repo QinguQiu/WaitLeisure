@@ -61,6 +61,8 @@ object Repos {
      * 定时规则触发时带上它的 whitelistGroupId，解锁时清回 -1。
      */
     fun isWhitelisted(packageName: String): Boolean {
+        // 本次锁定里被临时排除的，一律当作不在白名单
+        if (packageName in prefs.lockExcludedPackages) return false
         if (whitelist.contains(packageName)) return true
         val gid = prefs.activeWhitelistGroupId
         if (gid < 0) return false
@@ -68,26 +70,20 @@ object Repos {
     }
 
     /**
-     * 从**当前生效的名单**里彻底移除一个包：全局和本次分组两边都删。
+     * 把某个包从**本次锁定**里临时排除（锁机页拖到删除区）。
      *
-     * 锁机页显示的是「全局 ∪ 本次分组」，只删全局的话，
-     * 来自分组的那部分下一秒重算又会冒出来（用户实测「删了又出现」）。
+     * 只影响这一次锁定：解锁时清空，白名单配置一个字都不改。
+     * 之前这里写成了真删（全局和分组都删），用户反馈
+     * 「结束锁机后再进来，那个应用还是没了」—— 他要的是一次性删除。
      */
-    fun removeFromEffective(packageName: String) {
-        whitelist.remove(packageName)
-        val gid = prefs.activeWhitelistGroupId
-        if (gid >= 0) {
-            val g = groups.byId(gid) ?: return
-            if (packageName in g.packages) {
-                groups.save(g.copy(packages = g.packages - packageName))
-            }
-        }
+    fun excludeForThisLock(packageName: String) {
+        prefs.lockExcludedPackages = prefs.lockExcludedPackages + packageName
     }
 
-    /** 当前生效的完整白名单（全局 + 本次锁定选中的分组），给锁机页显示图标用。 */
+    /** 当前生效的完整白名单（全局 + 本次分组 − 本次临时排除），给锁机页显示图标用。 */
     fun effectiveWhitelist(): Set<String> {
         val gid = prefs.activeWhitelistGroupId
-        if (gid < 0) return whitelist.current()
-        return whitelist.current() + groups.packagesOf(gid)
+        val all = if (gid < 0) whitelist.current() else whitelist.current() + groups.packagesOf(gid)
+        return all - prefs.lockExcludedPackages
     }
 }

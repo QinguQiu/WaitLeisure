@@ -66,6 +66,8 @@ object LockController {
         // 解锁就回到「只用全局白名单」。下次锁机时再由调用方重新指定分组。
         Repos.prefs.activeWhitelistGroupId = -1L
         Repos.prefs.activeTaskName = ""
+        // 一次性排除只属于本次锁定，解锁就清空
+        Repos.prefs.lockExcludedPackages = emptySet()
         stopService(context)
         // 手动解锁也算「锁机结束」—— 用户刚在锁机页输完密码，
         // 这时候把他送到 App 首页最自然。

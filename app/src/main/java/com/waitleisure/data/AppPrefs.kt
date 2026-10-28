@@ -75,6 +75,17 @@ class AppPrefs(context: Context) {
         }
 
     /**
+     * 本次锁定**临时排除**的包名（锁机页拖到删除区删掉的）。
+     *
+     * 只对当前这次锁定有效：解锁时清空，白名单本身一个字都不改。
+     * 之前这里写成了真删，用户反馈「结束锁机后还是被删了」——
+     * 他要的是一次性删除，不是永久改配置。
+     */
+    var lockExcludedPackages: Set<String>
+        get() = sp.getStringSet(KEY_LOCK_EXCLUDED, emptySet())?.toSet() ?: emptySet()
+        set(value) = sp.edit().putStringSet(KEY_LOCK_EXCLUDED, value).apply()
+
+    /**
      * 开发者模式。打开后锁机页会多一个「跳到休息」按钮（仅番茄钟专注阶段）。
      *
      * 纯粹为了调试相位推进用 —— 否则验证一次休息要等满一个专注时长。
@@ -271,6 +282,7 @@ class AppPrefs(context: Context) {
     const val KEY_ACTIVE_TASK_NAME = "active_task_name"
     const val KEY_ACTIVE_ALLOW_PIN = "active_allow_pin_unlock"
     const val KEY_DEV_MODE = "developer_mode"
+    const val KEY_LOCK_EXCLUDED = "lock_excluded_packages"
     const val KEY_POMO_PAUSED = "pomodoro_paused_remaining"
     const val KEY_POMO_PAUSED_ROUND = "pomodoro_paused_round"
     const val KEY_WHITELIST_ORDER = "whitelist_display_order"
