@@ -67,6 +67,23 @@ object Repos {
         return groups.packagesOf(gid).contains(packageName)
     }
 
+    /**
+     * 从**当前生效的名单**里彻底移除一个包：全局和本次分组两边都删。
+     *
+     * 锁机页显示的是「全局 ∪ 本次分组」，只删全局的话，
+     * 来自分组的那部分下一秒重算又会冒出来（用户实测「删了又出现」）。
+     */
+    fun removeFromEffective(packageName: String) {
+        whitelist.remove(packageName)
+        val gid = prefs.activeWhitelistGroupId
+        if (gid >= 0) {
+            val g = groups.byId(gid) ?: return
+            if (packageName in g.packages) {
+                groups.save(g.copy(packages = g.packages - packageName))
+            }
+        }
+    }
+
     /** 当前生效的完整白名单（全局 + 本次锁定选中的分组），给锁机页显示图标用。 */
     fun effectiveWhitelist(): Set<String> {
         val gid = prefs.activeWhitelistGroupId
