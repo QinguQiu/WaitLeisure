@@ -139,7 +139,6 @@ fun HomeScreen(onOpenPermissions: () -> Unit) {
     // 过一会儿绑好了却没人重算，首页就一直挂着 6/7 —— 用户点进权限页再回来才变"已就绪"（实测）。
     // 所以启动后前几秒多查几次，绑上就自动更新。
     var permTick by remember { mutableIntStateOf(0) }
-    val perms0 = remember(refreshKey) { PermissionSnapshot.of(context) }
     LaunchedEffect(Unit, refreshKey) {
         // MIUI 冷启动后无障碍服务要 20 秒左右才真正绑上，所以一直重查到配齐为止。
         // 之前只重试 8 秒，8 秒后停在 6/7 就再也不动了 ——
@@ -150,6 +149,10 @@ fun HomeScreen(onOpenPermissions: () -> Unit) {
             tries++
             permTick++
         }
+        // 关键：循环退出那一刻说明「刚刚配齐」——但最后一次 permTick++ 是发生在
+        // 还没配齐的那一秒，界面画的仍是 6/7。这里必须再刷一次把结果画上去，
+        // 否则会永远停在 6/7（用户实测）。
+        permTick++
     }
     val perms = remember(refreshKey, permTick) { PermissionSnapshot.of(context) }
     var showSimplePicker by remember { mutableStateOf(false) }
