@@ -115,6 +115,24 @@ class LockAccessibilityService : AccessibilityService() {
         }
 
         if (reason != "拦截") {
+            // 诊断：系统窗口（systemui / HyperOS 插件）到底是"通知栏"还是"关机菜单"。
+            //
+            // 想实现「锁机期间也能长按电源关机」，就必须把这两者区分开 ——
+            // 通知栏撤遮罩会露出桌面（锁漏了 ✗），关机菜单不撤遮罩就摸不到按钮。
+            // 两者包名都是 com.android.systemui，只能靠窗口 type / title 分辨。
+            // 先把它们打出来看一次，再决定判据。
+            if (pkg == "com.android.systemui" || pkg.startsWith("miui.systemui") ||
+                pkg == "com.miui.securitycenter"
+            ) {
+                val w = runCatching {
+                    windows.firstOrNull { it.id == event.windowId }
+                }.getOrNull()
+                DiagLog.add(
+                    "窗口",
+                    "  ↳ 系统窗口 type=${w?.type} layer=${w?.layer} title=${w?.title} cls=${event.className}"
+                )
+            }
+
             // 什么时候可以撤遮罩，判据要很小心 —— 这里踩过一个坑：
             //
             // **遮罩窗口本身也是 com.waitleisure 的窗口**。它一盖上就产生一条
