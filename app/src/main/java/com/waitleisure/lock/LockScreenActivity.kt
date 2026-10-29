@@ -300,6 +300,10 @@ internal fun LockScreenRoute(onExit: () -> Unit) {
         whitelist = shownWhitelist,
         onLaunchApp = { pkg -> launchApp(context, pkg) },
         onUnlock = {
+            // 从退出页手动解锁 = 提前放弃。番茄钟如果还在跑，必须一起结束 ——
+            // 否则锁是解了，番茄钟状态还留着，回首页会一直显示「番茄钟进行中」，
+            // 而实际上用户已经不想继续了（用户实测）。
+            if (Pomodoro.isActive()) Pomodoro.stop(context)
             LockController.unlock(context)
             onExit()
         }
