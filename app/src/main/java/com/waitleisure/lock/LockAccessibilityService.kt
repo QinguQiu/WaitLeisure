@@ -122,15 +122,20 @@ class LockAccessibilityService : AccessibilityService() {
             // 两者包名都是 com.android.systemui，只能靠窗口 type / title 分辨。
             // 先把它们打出来看一次，再决定判据。
             if (pkg == "com.android.systemui" || pkg.startsWith("miui.systemui") ||
-                pkg == "com.miui.securitycenter"
+                pkg == "com.miui.securitycenter" || pkg == "com.miui.home"
             ) {
-                val w = runCatching {
-                    windows.firstOrNull { it.id == event.windowId }
-                }.getOrNull()
-                DiagLog.add(
-                    "窗口",
-                    "  ↳ 系统窗口 type=${w?.type} layer=${w?.layer} title=${w?.title} cls=${event.className}"
-                )
+                // 按 event.windowId 查是查不到的（实测 type=null）——
+                // 改成把当前**所有窗口**列出来，看关机菜单到底以什么形式存在。
+                runCatching {
+                    windows.forEach { w ->
+                        val wp = w.root?.packageName ?: "?"
+                        DiagLog.add(
+                            "窗口",
+                            "  ↳ win type=${w.type} layer=${w.layer} " +
+                                "title=${w.title} pkg=$wp cls=${w.root?.className}"
+                        )
+                    }
+                }
             }
 
             // 什么时候可以撤遮罩，判据要很小心 —— 这里踩过一个坑：
