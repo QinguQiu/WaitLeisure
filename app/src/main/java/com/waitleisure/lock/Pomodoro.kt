@@ -209,6 +209,30 @@ object Pomodoro {
         return true
     }
 
+    /**
+     * 冷启动时处理残留状态。
+     *
+     * 相位结束时刻已经过去（超过 5 秒）= 那段时间没人 tick = 进程被系统或用户杀过。
+     * 这种时候**整段番茄作废**，直接清掉 —— 不要"补推"到下一个相位，
+     * 否则用户休息时清掉后台、再打开就会凭空多出一个"进行中"并重新锁机。
+     */
+    fun discardIfStale(context: Context) {
+        val cur = current()
+        if (cur == null) {
+            // 只有暂停标记残留（状态串已被清）
+            if (Repos.prefs.pomodoroPausedRemaining > 0L) {
+                Repos.prefs.pomodoroPausedRemaining = 0L
+                DiagLog.add("番茄", "启动时清掉残留的暂停标记")
+            }
+            return
+        }
+        val overshoot = System.currentTimeMillis() - cur.third
+        if (overshoot > 5_000L) {
+            DiagLog.add("番茄", "启动时发现过期相位（已过 ${overshoot / 1000} 秒），作废")
+            stop(context)
+        }
+    }
+
     /** 现在是不是暂停中。 */
     fun isPaused(): Boolean = Repos.prefs.pomodoroPausedRemaining > 0L
 

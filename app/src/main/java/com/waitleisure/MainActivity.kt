@@ -35,15 +35,14 @@ class MainActivity : ComponentActivity() {
         // 每次冷启动都把闹钟重排一遍：这是最省事也最不容易漏的状态修复点
         AlarmScheduler.rescheduleAll(this)
 
-        // 番茄钟的相位靠前台服务每秒 tick 推进；App 被划掉过、或者服务被 MIUI 收掉，
-        // 状态就会卡在某个**已经过期**的相位上 —— 表现是首页一直显示
-        // 「休息中 · 0:00」或者「专注中 · 0:00」（用户实测）。
-        // 冷启动时把过期的相位一次性补推完（tick 返回 true 表示推进了一格）。
-        runCatching {
-            var guard = 0
-            while (Pomodoro.tick(this) && guard < 200) guard++
-            if (guard > 0) DiagLog.add("番茄", "启动时补推了 $guard 个过期相位")
-        }
+        // 番茄钟的节奏靠前台服务每秒 tick 推进。进程被划掉之后没人推进，
+        // 状态就会卡在一个**已经过期**的相位上。
+        //
+        // 早期版本在这里"补推"过期相位，结果很糟：用户休息时清掉后台，
+        // 再打开就凭空多出一个"番茄钟进行中"并重新锁机（用户实测）。
+        // 正确语义是 —— **进程被杀 = 这一段番茄作废**，直接清掉，
+        // 让用户自己决定要不要重开。
+        runCatching { Pomodoro.discardIfStale(this) }
 
         setContent {
             MaterialTheme(
