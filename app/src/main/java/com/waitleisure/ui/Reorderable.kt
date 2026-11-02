@@ -50,7 +50,8 @@ import kotlin.math.abs
  * 表现是「拖了几乎没反应」。
  */
 class DragDropState(
-    private val listState: LazyListState,
+    /** 公开出去：调用方要把它交给 LazyColumn 的 state 参数。 */
+    val listState: LazyListState,
     private val scope: CoroutineScope,
     /** 数据条目之前有多少个非数据 item（页头之类）。 */
     private val headerCount: Int,
