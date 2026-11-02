@@ -504,7 +504,7 @@ fun SettingsScreen(onOpenTasks: () -> Unit = {}) {
             }
             Text(
                 text = "打开后，番茄钟专注阶段锁机页第一页底部会出现「跳到休息」按钮。" +
-                    "\\n仅用于调试相位推进，平时请关掉。",
+                    "\n仅用于调试相位推进，平时请关掉。",
                 fontSize = 11.sp,
                 lineHeight = 16.sp,
                 color = MaterialTheme.colorScheme.onSurfaceVariant
