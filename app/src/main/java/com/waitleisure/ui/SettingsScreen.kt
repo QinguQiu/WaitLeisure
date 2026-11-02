@@ -38,6 +38,7 @@ import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.produceState
 import androidx.compose.runtime.remember
@@ -88,6 +89,8 @@ fun SettingsScreen(onOpenTasks: () -> Unit = {}) {
     var devMode by remember { mutableStateOf(Repos.prefs.developerMode) }
     // 待删除的壁纸（弹确认框）
     var deletingWallpaper by remember { mutableStateOf<WallpaperEntry?>(null) }
+    // 壁纸库/模式的改动只写 prefs，Compose 观察不到 —— 用这个版号强制重组
+    var wallpaperLibVersion by remember { mutableIntStateOf(0) }
     var pinSet by remember { mutableStateOf(!Repos.prefs.pinHash.isNullOrEmpty()) }
 
     // 番茄钟**休息期间不许改设置**。
@@ -317,7 +320,8 @@ fun SettingsScreen(onOpenTasks: () -> Unit = {}) {
         // ---------------------------------------------------------- 壁纸库
         //
         // 「换一张图片…」是加进库里；这里管的是库里已有哪些、怎么轮换、删哪些。
-        val library = Repos.wallpapers.list()
+        val library = remember(wallpaperLibVersion) { Repos.wallpapers.list() }
+        val currentMode = remember(wallpaperLibVersion) { Repos.prefs.wallpaperMode }
         SectionCard(
             title = "壁纸库",
             subtitle = if (library.isEmpty()) "还没有壁纸" else "共 ${library.size} 张"
@@ -329,8 +333,11 @@ fun SettingsScreen(onOpenTasks: () -> Unit = {}) {
                     WallpaperMode.RANDOM to "每次随机",
                     WallpaperMode.SEQUENTIAL to "按顺序"
                 ).forEach { (mode, label) ->
-                    val on = Repos.prefs.wallpaperMode == mode
-                    TextButton(onClick = { Repos.prefs.wallpaperMode = mode }) {
+                    val on = currentMode == mode
+                    TextButton(onClick = {
+                        Repos.prefs.wallpaperMode = mode
+                        wallpaperLibVersion++
+                    }) {
                         Text(
                             text = label,
                             color = if (on) {
@@ -343,7 +350,7 @@ fun SettingsScreen(onOpenTasks: () -> Unit = {}) {
                 }
             }
             Text(
-                text = when (Repos.prefs.wallpaperMode) {
+                text = when (currentMode) {
                     WallpaperMode.RANDOM -> "每次锁机从库里随机挑一张（不会连着两次同一张）"
                     WallpaperMode.SEQUENTIAL -> "每次锁机按顺序取下一张，用完回到第一张"
                     else -> "一直用当前这张，不轮换"
@@ -391,6 +398,7 @@ fun SettingsScreen(onOpenTasks: () -> Unit = {}) {
                                 Repos.prefs.wallpaperScale = entry.scale
                                 Repos.prefs.wallpaperOffsetX = entry.offsetX
                                 Repos.prefs.wallpaperOffsetY = entry.offsetY
+                                wallpaperLibVersion++
                             }) { Text("用这张") }
                         }
                         TextButton(onClick = { deletingWallpaper = entry }) {
@@ -545,6 +553,7 @@ fun SettingsScreen(onOpenTasks: () -> Unit = {}) {
             confirmButton = {
                 TextButton(onClick = {
                     Repos.wallpapers.delete(context, target.id)
+                    wallpaperLibVersion++
                     deletingWallpaper = null
                 }) { Text("删除") }
             },
