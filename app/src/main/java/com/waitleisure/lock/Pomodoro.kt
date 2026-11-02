@@ -54,7 +54,7 @@ object Pomodoro {
         val c = parse(config)
         var total = c.rounds * c.focusMinutes
         for (round in 1 until c.rounds) {
-            total += if (round % c.roundsPerSet == 0) c.longBreak else c.shortBreak
+            total += if (c.rounds > 2 && round % c.roundsPerSet == 0) c.longBreak else c.shortBreak
         }
         return total
     }
@@ -198,7 +198,8 @@ object Pomodoro {
         if (phase != "focus") return false
         val c = parse(activeConfig())
         if (round >= c.rounds) return false
-        val isLong = round % c.roundsPerSet == 0
+        // 只有 2 个番茄时只有一段休息，固定为短休 —— 长休没有意义。
+            val isLong = c.rounds > 2 && round % c.roundsPerSet == 0
         val mins = if (isLong) c.longBreak else c.shortBreak
         val now = System.currentTimeMillis()
         Repos.prefs.pomodoroState = "$round,break," + (now + mins * 60_000L)
@@ -306,7 +307,8 @@ object Pomodoro {
                 LockController.unlock(context)
                 return true
             }
-            val isLong = round % c.roundsPerSet == 0
+            // 只有 2 个番茄时只有一段休息，固定为短休 —— 长休没有意义。
+            val isLong = c.rounds > 2 && round % c.roundsPerSet == 0
             val mins = if (isLong) c.longBreak else c.shortBreak
             Repos.prefs.pomodoroState = "$round,break," + (now + mins * 60_000L)
             // 休息期间解锁。注意这里只清锁定状态、不停前台服务 ——
