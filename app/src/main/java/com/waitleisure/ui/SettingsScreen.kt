@@ -371,7 +371,7 @@ fun SettingsScreen(onOpenTasks: () -> Unit = {}) {
             } else {
                 Spacer(Modifier.height(8.dp))
                 val activePath = Repos.prefs.wallpaperImagePath
-                library.forEach { entry ->
+                library.forEachIndexed { idx, entry ->
                     Row(
                         modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp),
                         verticalAlignment = Alignment.CenterVertically
@@ -391,6 +391,19 @@ fun SettingsScreen(onOpenTasks: () -> Unit = {}) {
                                 fontSize = 11.sp,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant
                             )
+                        }
+                        // 顺序模式按这个顺序轮换，所以要能调
+                        if (idx > 0) {
+                            TextButton(onClick = {
+                                Repos.wallpapers.move(idx, idx - 1)
+                                wallpaperLibVersion++
+                            }) { Text("↑") }
+                        }
+                        if (idx < library.lastIndex) {
+                            TextButton(onClick = {
+                                Repos.wallpapers.move(idx, idx + 1)
+                                wallpaperLibVersion++
+                            }) { Text("↓") }
                         }
                         if (entry.path != activePath) {
                             TextButton(onClick = {

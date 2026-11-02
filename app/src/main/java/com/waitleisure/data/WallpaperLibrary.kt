@@ -94,7 +94,7 @@ class WallpaperLibrary(private val prefs: AppPrefs) {
         if (raw.isBlank()) return emptyList()
         val arr = JSONArray(raw)
         (0 until arr.length()).map { WallpaperEntry.fromJson(arr.getJSONObject(it)) }
-    }.getOrDefault(emptyList()).sortedBy { it.addedAt }
+    }.getOrDefault(emptyList())
 
     private fun persist(list: List<WallpaperEntry>) {
         val arr = JSONArray()
@@ -134,6 +134,19 @@ class WallpaperLibrary(private val prefs: AppPrefs) {
         DiagLog.add("壁纸", "加入库：${entry.name}（id=$id，共 ${list.size + 1} 张）")
         entry
     }.getOrNull()
+
+    /**
+     * 调整库里的顺序（「按顺序」模式就是按这个顺序轮换）。
+     *
+     * 直接重排 JSON 数组 —— 顺序就是数组顺序，不另外存下标。
+     */
+    fun move(from: Int, to: Int) {
+        val list = list().toMutableList()
+        if (from !in list.indices || to !in list.indices || from == to) return
+        val item = list.removeAt(from)
+        list.add(to, item)
+        persist(list)
+    }
 
     /** 更新某张壁纸的取景参数。 */
     fun updateFraming(id: Long, scale: Float, offsetX: Float, offsetY: Float) {
