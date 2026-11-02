@@ -26,14 +26,32 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.foundation.lazy.itemsIndexed
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.material3.AlertDialog
+import androidx.compose.foundation.lazy.itemsIndexed
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.material3.Button
+import androidx.compose.foundation.lazy.itemsIndexed
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.material3.Checkbox
+import androidx.compose.foundation.lazy.itemsIndexed
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.foundation.lazy.itemsIndexed
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.material3.OutlinedButton
+import androidx.compose.foundation.lazy.itemsIndexed
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.material3.OutlinedTextField
+import androidx.compose.foundation.lazy.itemsIndexed
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.material3.Switch
+import androidx.compose.foundation.lazy.itemsIndexed
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.material3.Text
+import androidx.compose.foundation.lazy.itemsIndexed
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
@@ -371,54 +389,72 @@ fun SettingsScreen(onOpenTasks: () -> Unit = {}) {
             } else {
                 Spacer(Modifier.height(8.dp))
                 val activePath = Repos.prefs.wallpaperImagePath
-                library.forEachIndexed { idx, entry ->
-                    Row(
-                        modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp),
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        Column(Modifier.weight(1f)) {
-                            Text(
-                                text = entry.name,
-                                fontSize = 14.sp,
-                                color = if (entry.path == activePath) {
-                                    MaterialTheme.colorScheme.primary
-                                } else {
-                                    MaterialTheme.colorScheme.onSurface
-                                }
-                            )
-                            Text(
-                                text = if (entry.path == activePath) "当前使用" else "点「用这张」切换",
-                                fontSize = 11.sp,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant
-                            )
-                        }
-                        // 顺序模式按这个顺序轮换，所以要能调
-                        if (idx > 0) {
-                            TextButton(onClick = {
-                                Repos.wallpapers.move(idx, idx - 1)
-                                wallpaperLibVersion++
-                            }) { Text("↑") }
-                        }
-                        if (idx < library.lastIndex) {
-                            TextButton(onClick = {
-                                Repos.wallpapers.move(idx, idx + 1)
-                                wallpaperLibVersion++
-                            }) { Text("↓") }
-                        }
-                        if (entry.path != activePath) {
-                            TextButton(onClick = {
-                                Repos.prefs.wallpaperImagePath = entry.path
-                                Repos.prefs.wallpaperScale = entry.scale
-                                Repos.prefs.wallpaperOffsetX = entry.offsetX
-                                Repos.prefs.wallpaperOffsetY = entry.offsetY
-                                wallpaperLibVersion++
-                            }) { Text("用这张") }
-                        }
-                        TextButton(onClick = { deletingWallpaper = entry }) {
-                            Text("删除", color = MaterialTheme.colorScheme.error)
+                // 复用现有的拖动框架（和白名单 / 定时页是同一套 DragDropState）。
+                //
+                // 为什么是 LazyColumn：DragDropState 靠 LazyListState.layoutInfo 算槽位，
+                // 普通 Column 给不了。所以这里用一个**高度定死**的 LazyColumn ——
+                // 不内部滚动，就不会和外层设置页抢手势，但拖动排序照常工作。
+                val itemHeight = 52.dp
+                val dragState = rememberDragDropState(
+                    listState = rememberLazyListState(),
+                    headerCount = 0,
+                    onMove = { from, to ->
+                        Repos.wallpapers.move(from, to)
+                        wallpaperLibVersion++
+                    }
+                )
+                LazyColumn(
+                    state = dragState.listState,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(itemHeight * library.size)
+                        .dragContainer(dragState),
+                    userScrollEnabled = false
+                ) {
+                    itemsIndexed(library, key = { _, e -> e.id }) { idx, entry ->
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .height(itemHeight)
+                                .draggableItem(dragState, idx),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Column(Modifier.weight(1f)) {
+                                Text(
+                                    text = entry.name,
+                                    fontSize = 14.sp,
+                                    color = if (entry.path == activePath) {
+                                        MaterialTheme.colorScheme.primary
+                                    } else {
+                                        MaterialTheme.colorScheme.onSurface
+                                    }
+                                )
+                                Text(
+                                    text = if (entry.path == activePath) "当前使用" else "长按拖动排序",
+                                    fontSize = 11.sp,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                                )
+                            }
+                            if (entry.path != activePath) {
+                                TextButton(onClick = {
+                                    Repos.prefs.wallpaperImagePath = entry.path
+                                    Repos.prefs.wallpaperScale = entry.scale
+                                    Repos.prefs.wallpaperOffsetX = entry.offsetX
+                                    Repos.prefs.wallpaperOffsetY = entry.offsetY
+                                    wallpaperLibVersion++
+                                }) { Text("用这张") }
+                            }
+                            TextButton(onClick = { deletingWallpaper = entry }) {
+                                Text("删除", color = MaterialTheme.colorScheme.error)
+                            }
                         }
                     }
                 }
+                Text(
+                    text = "长按某一行可以拖动排序；「按顺序」模式就按这个顺序轮换。",
+                    fontSize = 11.sp,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
             }
         }
 
