@@ -29,6 +29,9 @@ class MainActivity : ComponentActivity() {
         val rebound = Permissions.rebindAccessibilityIfNeeded(this)
         if (rebound) DiagLog.add("权限", "启动时检测到无障碍已掉，已自动重绑")
 
+        // 把旧版单张壁纸迁进壁纸库（只跑一次）
+        runCatching { Repos.wallpapers.migrateIfNeeded(this) }
+
         // 每次冷启动都把闹钟重排一遍：这是最省事也最不容易漏的状态修复点
         AlarmScheduler.rescheduleAll(this)
 

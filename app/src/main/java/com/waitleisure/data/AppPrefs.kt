@@ -108,6 +108,26 @@ class AppPrefs(context: Context) {
         get() = sp.getInt(KEY_WALLPAPER_COLOR, DEFAULT_WALLPAPER_COLOR)
         set(value) = sp.edit().putInt(KEY_WALLPAPER_COLOR, value).apply()
 
+    /** 壁纸库：JSON 数组，每项见 WallpaperEntry。 */
+    var wallpaperLibraryJson: String
+        get() = sp.getString(KEY_WALLPAPER_LIBRARY, "") ?: ""
+        set(value) = sp.edit().putString(KEY_WALLPAPER_LIBRARY, value).apply()
+
+    /** 选取模式：single / random / sequential。 */
+    var wallpaperMode: String
+        get() = sp.getString(KEY_WALLPAPER_MODE, "single") ?: "single"
+        set(value) = sp.edit().putString(KEY_WALLPAPER_MODE, value).apply()
+
+    /** 顺序模式的下标。 */
+    var wallpaperSeqCursor: Int
+        get() = sp.getInt(KEY_WALLPAPER_SEQ, 0)
+        set(value) = sp.edit().putInt(KEY_WALLPAPER_SEQ, value).apply()
+
+    /** 旧的单张壁纸是否已经迁进库。 */
+    var wallpaperLibraryMigrated: Boolean
+        get() = sp.getBoolean(KEY_WALLPAPER_MIGRATED, false)
+        set(value) = sp.edit().putBoolean(KEY_WALLPAPER_MIGRATED, value).apply()
+
     /** 锁机页壁纸图片路径；null 表示用纯色。 */
     var wallpaperImagePath: String?
         get() = sp.getString(KEY_WALLPAPER_IMAGE, null)
@@ -272,7 +292,11 @@ class AppPrefs(context: Context) {
         // KEY_QUICK_DURATIONS 已随「立即锁机常用时长」一并删除
         const val KEY_SIGNATURE = "signature"
         const val KEY_WALLPAPER_COLOR = "wallpaper_color"
-        const val KEY_WALLPAPER_IMAGE = "wallpaper_image"
+        const val KEY_WALLPAPER_LIBRARY = "wallpaper_library"
+    const val KEY_WALLPAPER_MODE = "wallpaper_mode"
+    const val KEY_WALLPAPER_SEQ = "wallpaper_seq_cursor"
+    const val KEY_WALLPAPER_MIGRATED = "wallpaper_library_migrated"
+    const val KEY_WALLPAPER_IMAGE = "wallpaper_image"
         const val KEY_WALLPAPER_SCALE = "wallpaper_scale"
         const val KEY_WALLPAPER_OFFSET_X = "wallpaper_offset_x"
         const val KEY_WALLPAPER_OFFSET_Y = "wallpaper_offset_y"

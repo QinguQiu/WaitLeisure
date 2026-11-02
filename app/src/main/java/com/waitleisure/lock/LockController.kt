@@ -51,6 +51,10 @@ object LockController {
         // 规则可以单独指定严格模式；-1 = 跟随全局
         Repos.prefs.activeAllowPinUnlockOverride = strictMode
 
+        // 按壁纸库的模式挑一张（随机 / 顺序 / 固定）。
+        // 必须在这里挑，不能在渲染时随机 —— 否则每次重组都换一张。
+        Repos.wallpapers.applyForLock()
+
         Repos.lockState.lockUntil(untilMillis, scheduleId)
         startService(context)
         // 悬浮窗优先：锁机界面就是它，秒显、常驻、不经过 Activity 启动，MIUI 拦不住。

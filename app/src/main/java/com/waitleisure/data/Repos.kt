@@ -29,6 +29,7 @@ object Repos {
         private set
 
     lateinit var groups: WhitelistGroupRepository
+    lateinit var wallpapers: WallpaperLibrary
         private set
 
     lateinit var tasks: TaskRepository
@@ -44,6 +45,7 @@ object Repos {
         lockState = LockStateRepository(prefs)
         installedApps = InstalledAppsRepository(app)
         groups = WhitelistGroupRepository(prefs)
+        wallpapers = WallpaperLibrary(prefs)
         tasks = TaskRepository(prefs)
         initialized = true
     }

@@ -58,6 +58,8 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.waitleisure.data.AppPrefs
+import com.waitleisure.data.WallpaperEntry
+import com.waitleisure.data.WallpaperMode
 import com.waitleisure.util.DiagLog
 import com.waitleisure.data.SIGNATURE_MAX_LENGTH
 import com.waitleisure.data.Repos
@@ -84,6 +86,8 @@ fun SettingsScreen(onOpenTasks: () -> Unit = {}) {
     var showQuickEdit by remember { mutableStateOf(false) }
     var showPomodoroConfig by remember { mutableStateOf(false) }
     var devMode by remember { mutableStateOf(Repos.prefs.developerMode) }
+    // 待删除的壁纸（弹确认框）
+    var deletingWallpaper by remember { mutableStateOf<WallpaperEntry?>(null) }
     var pinSet by remember { mutableStateOf(!Repos.prefs.pinHash.isNullOrEmpty()) }
 
     // 番茄钟**休息期间不许改设置**。
@@ -310,6 +314,93 @@ fun SettingsScreen(onOpenTasks: () -> Unit = {}) {
             }
         }
 
+        // ---------------------------------------------------------- 壁纸库
+        //
+        // 「换一张图片…」是加进库里；这里管的是库里已有哪些、怎么轮换、删哪些。
+        val library = Repos.wallpapers.list()
+        SectionCard(
+            title = "壁纸库",
+            subtitle = if (library.isEmpty()) "还没有壁纸" else "共 ${library.size} 张"
+        ) {
+            // 选取模式
+            Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                listOf(
+                    WallpaperMode.SINGLE to "固定一张",
+                    WallpaperMode.RANDOM to "每次随机",
+                    WallpaperMode.SEQUENTIAL to "按顺序"
+                ).forEach { (mode, label) ->
+                    val on = Repos.prefs.wallpaperMode == mode
+                    TextButton(onClick = { Repos.prefs.wallpaperMode = mode }) {
+                        Text(
+                            text = label,
+                            color = if (on) {
+                                MaterialTheme.colorScheme.primary
+                            } else {
+                                MaterialTheme.colorScheme.onSurfaceVariant
+                            }
+                        )
+                    }
+                }
+            }
+            Text(
+                text = when (Repos.prefs.wallpaperMode) {
+                    WallpaperMode.RANDOM -> "每次锁机从库里随机挑一张（不会连着两次同一张）"
+                    WallpaperMode.SEQUENTIAL -> "每次锁机按顺序取下一张，用完回到第一张"
+                    else -> "一直用当前这张，不轮换"
+                },
+                fontSize = 11.sp,
+                lineHeight = 16.sp,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+
+            if (library.isEmpty()) {
+                Spacer(Modifier.height(8.dp))
+                Text(
+                    text = "点上面的「换一张图片…」加第一张。加过的壁纸都会留在库里，可以随时删。",
+                    fontSize = 11.sp,
+                    lineHeight = 16.sp,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            } else {
+                Spacer(Modifier.height(8.dp))
+                val activePath = Repos.prefs.wallpaperImagePath
+                library.forEach { entry ->
+                    Row(
+                        modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Column(Modifier.weight(1f)) {
+                            Text(
+                                text = entry.name,
+                                fontSize = 14.sp,
+                                color = if (entry.path == activePath) {
+                                    MaterialTheme.colorScheme.primary
+                                } else {
+                                    MaterialTheme.colorScheme.onSurface
+                                }
+                            )
+                            Text(
+                                text = if (entry.path == activePath) "当前使用" else "点「用这张」切换",
+                                fontSize = 11.sp,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                        }
+                        if (entry.path != activePath) {
+                            TextButton(onClick = {
+                                Repos.prefs.wallpaperImagePath = entry.path
+                                Repos.prefs.wallpaperScale = entry.scale
+                                Repos.prefs.wallpaperOffsetX = entry.offsetX
+                                Repos.prefs.wallpaperOffsetY = entry.offsetY
+                            }) { Text("用这张") }
+                        }
+                        TextButton(onClick = { deletingWallpaper = entry }) {
+                            Text("删除", color = MaterialTheme.colorScheme.error)
+                        }
+                    }
+                }
+            }
+        }
+
         // 个性签名：锁机页上显示的一句话。
         // 放「锁机外观」这一组里 —— 它和壁纸一样，纯粹影响锁机页长什么样。
         SectionCard(
@@ -445,6 +536,24 @@ fun SettingsScreen(onOpenTasks: () -> Unit = {}) {
         )
     }
 
+    // 删除壁纸的确认框
+    deletingWallpaper?.let { target ->
+        AlertDialog(
+            onDismissRequest = { deletingWallpaper = null },
+            title = { Text("删除这张壁纸？") },
+            text = { Text("「${target.name}」会从壁纸库里删掉，文件也一起删。无法恢复。") },
+            confirmButton = {
+                TextButton(onClick = {
+                    Repos.wallpapers.delete(context, target.id)
+                    deletingWallpaper = null
+                }) { Text("删除") }
+            },
+            dismissButton = {
+                TextButton(onClick = { deletingWallpaper = null }) { Text("取消") }
+            }
+        )
+    }
+
     // 壁纸取景页。选完图自动弹；也可以事后点「调整取景…」再调。
     pendingWallpaperCrop?.let { bmp ->
         WallpaperCropDialog(
@@ -464,20 +573,29 @@ fun SettingsScreen(onOpenTasks: () -> Unit = {}) {
             onConfirm = { scale, ox, oy ->
                 runCatching {
                     if (pendingIsNewImage) {
-                        // 确认了才把临时文件转正
-                        val dst = File(context.filesDir, "wallpaper.jpg")
+                        // 确认了才进库（库里会复制一份，临时文件随后删掉）
                         val tmp = File(context.filesDir, PENDING_WALLPAPER)
                         if (tmp.exists()) {
-                            dst.delete()
-                            tmp.renameTo(dst)
+                            val entry = Repos.wallpapers.add(context, tmp)
+                            if (entry != null) {
+                                Repos.wallpapers.updateFraming(entry.id, scale, ox, oy)
+                                // 新加的这张直接设为「当前」
+                                Repos.prefs.wallpaperImagePath = entry.path
+                                Repos.prefs.wallpaperScale = scale
+                                Repos.prefs.wallpaperOffsetX = ox
+                                Repos.prefs.wallpaperOffsetY = oy
+                            }
+                            runCatching { tmp.delete() }
                         }
-                        Repos.prefs.wallpaperImagePath = dst.absolutePath
-                        // 换了图，上一张的缩放/偏移必须清掉
-                        Repos.prefs.resetWallpaperFraming()
+                    } else {
+                        // 「调整取景…」= 只改当前这张的取景参数，要把库里的也一起更新
+                        Repos.wallpapers.active()?.let {
+                            Repos.wallpapers.updateFraming(it.id, scale, ox, oy)
+                        }
+                        Repos.prefs.wallpaperScale = scale
+                        Repos.prefs.wallpaperOffsetX = ox
+                        Repos.prefs.wallpaperOffsetY = oy
                     }
-                    Repos.prefs.wallpaperScale = scale
-                    Repos.prefs.wallpaperOffsetX = ox
-                    Repos.prefs.wallpaperOffsetY = oy
                 }
                 pendingWallpaperCrop = null
                 pendingIsNewImage = false
